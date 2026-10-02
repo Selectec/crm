@@ -53,6 +53,7 @@ vi.mock('frappe-ui', async (original) => {
   const { reactive } = await import('vue')
   return { ...actual, call: async (method, context) => {
     if (method === 'test.editor.pause') return fixture.controllerPause
+    if (method === 'test.editor.rights') return fixture.controllerRights
     if (method === 'crm.api.record_page.get_panels') {
       if (fixture.discovery) return fixture.discovery(context)
       return {context, contributions: fixture.contributions || (fixture.enabled ? [{key:'demo:activity',id:'activity',owner_app:'demo',renderer:'activity',version:1,js:{url:'/assets/demo/demo.bundle.js',revision:'one'},css:[],default_panel:'Activity',panels:[{id:'Activity',name:'demo:activity:Activity',label:'Activity'},{id:'Notes',name:'demo:activity:Notes',label:'Notes'}]}] : []),diagnostics:[]}
@@ -136,6 +137,56 @@ async function open(Page, props) {
 }
 
 describe('existing native relationship pages',()=>{
+  it('awaits native controller modal rights before exposing fields and honors read-only without changing the next stock editor', async () => {
+    let resolveRights
+    fixture.controllerRights = new Promise(resolve=>{resolveRights=resolve})
+    fixture.nativeControllers = true
+    fixture.controllerScript = `class FCRMNote { get modalOptions() { return this.call('test.editor.rights') } }`
+    const loaded = {doctype:'FCRM Note',name:'Async readonly policy Note',title:'Shared global source',content:'<p>Full shared global content</p>',modified:'2026-10-02 12:00:00.000001'}
+    fixture.documents.set('FCRM Note:Async readonly policy Note',reactive({doc:loaded,save:{submit:vi.fn()},actions:[],fieldPropertyOverrides:{}}))
+    await open({render:()=>null},{})
+    useDoctypeModal().showModal({doctype:'FCRM Note',name:loaded.name,title:'Note'})
+    await settle()
+    expect(document.body.querySelector('input[placeholder="Title"]')).toBeNull()
+    resolveRights({fullDocumentSave:true,readOnly:true})
+    await settle()
+    expect(document.body.textContent).toContain('View Note')
+    const title = document.body.querySelector('input[placeholder="Title"]')
+    expect(title.value).toBe('Shared global source')
+    expect(title.disabled || title.readOnly).toBe(true)
+    expect(document.body.textContent).toContain('Full shared global content')
+    expect([...document.body.querySelectorAll('button')].some(button=>button.textContent==='Update')).toBe(false)
+    expect(document.body.querySelector('[contenteditable="true"]')).toBeNull()
+    useDoctypeModal().show.value = false
+    await settle()
+    fixture.controllerRights = Promise.resolve({fullDocumentSave:false,readOnly:false})
+    const stockSave = vi.fn()
+    const stock = {...loaded,name:'Stock after readonly policy Note',title:'Ordinary stock source'}
+    fixture.documents.set('FCRM Note:Stock after readonly policy Note',reactive({doc:stock,save:{submit:stockSave},actions:[],fieldPropertyOverrides:{}}))
+    useDoctypeModal().showModal({doctype:'FCRM Note',name:stock.name,title:'Note'})
+    await settle()
+    expect(document.body.querySelector('input[placeholder="Title"]').value).toBe(stock.title)
+    ;[...document.body.querySelectorAll('button')].find(button=>button.textContent==='Update').click()
+    await settle()
+    expect(stockSave).toHaveBeenCalledTimes(1)
+  })
+  it('retains the native save rejection and displays an asynchronous error-hook failure without an unhandled rejection', async () => {
+    fixture.nativeControllers = true
+    fixture.nativeSaves = []
+    fixture.saveResult = null
+    fixture.controllerScript = `class FCRMNote { async onError() { throw new Error('Native error hook failed') } }`
+    const loaded = {doctype:'FCRM Note',name:'Error hook Note',title:'Unsent source',modified:'2026-10-02 12:00:00.000001'}
+    fixture.documents.set('FCRM Note:Error hook Note',reactive({doc:loaded,save:{submit:vi.fn()},actions:[],fieldPropertyOverrides:{}}))
+    await open({render:()=>null},{})
+    useDoctypeModal().showModal({doctype:'FCRM Note',name:loaded.name,title:'Note',fullDocumentSave:true})
+    await settle()
+    ;[...document.body.querySelectorAll('button')].find(button=>button.textContent==='Update').click()
+    await settle()
+    expect(document.body.textContent).toContain('Document changed. Please refresh.')
+    expect(document.body.textContent).toContain('Native error hook failed')
+    expect(useDoctypeModal().show.value).toBe(true)
+    expect(document.body.querySelector('input[placeholder="Title"]').value).toBe('Unsent source')
+  })
   it('shows an asynchronous native save-hook error without losing the accepted document or leaving an unhandled rejection', async () => {
     fixture.nativeControllers = true
     fixture.nativeSaves = []

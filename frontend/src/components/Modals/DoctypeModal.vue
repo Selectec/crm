@@ -137,6 +137,7 @@ const editorDoc = computed({
 })
 const doc = computed(() => editorDoc.value || document.doc || {})
 const fullDocumentSave = ref(props.fullDocumentSave)
+const readOnly = ref(props.readOnly)
 const initializing = ref(Boolean(props.docname))
 const loadFailed = ref(false)
 
@@ -163,7 +164,9 @@ const layout = createResource({
 })
 
 const error = ref(null)
-const editMode = computed(() => Boolean(document.doc?.name) || Boolean(props.docname))
+const editMode = computed(
+  () => Boolean(document.doc?.name) || Boolean(props.docname),
+)
 
 const _create = createResource({
   url: 'frappe.client.insert',
@@ -188,7 +191,7 @@ const _create = createResource({
 })
 
 async function create() {
-  if (props.readOnly) return
+  if (readOnly.value) return
   await triggerOnBeforeCreate?.()
 
   _create.submit({
@@ -216,20 +219,30 @@ const documentSave = createResource({
     emit('afterUpdate', d)
     if (!hookFailed) show.value = false
   },
-  onError: (err) => {
+  onError: async (err) => {
     error.value = err.messages?.[0] || err.message || 'Could not update document'
-    editor.triggerOnError?.()
+    try {
+      await editor.triggerOnError?.()
+    } catch (hookError) {
+      error.value +=
+        '\n' +
+        (hookError.messages?.[0] ||
+          hookError.message ||
+          'Could not complete error handler')
+    }
   },
 })
 
 async function update() {
-  if (props.readOnly || initializing.value || loadFailed.value) return
+  if (readOnly.value || initializing.value || loadFailed.value) return
   if (fullDocumentSave.value) {
+    error.value = null
     try {
       await editor.triggerOnValidate?.()
       await documentSave.submit({ doc: { ...doc.value } })
     } catch (err) {
-      error.value = err.messages?.[0] || err.message || 'Could not update document'
+      error.value ||=
+        err.messages?.[0] || err.message || 'Could not update document'
     }
     return
   }
@@ -272,10 +285,17 @@ onMounted(async () => {
     if (props.docname) {
       await document.reload?.()
       await setupFormScript?.()
-      fullDocumentSave.value ||=
-        getControllers?.().some(
-          (controller) => controller.modalOptions?.fullDocumentSave === true,
-        ) || false
+      const modalOptions = await Promise.all(
+        (getControllers?.() || []).map(
+          (controller) => controller.modalOptions || {},
+        ),
+      )
+      fullDocumentSave.value ||= modalOptions.some(
+        (options) => options?.fullDocumentSave === true,
+      )
+      readOnly.value ||= modalOptions.some(
+        (options) => options?.readOnly === true,
+      )
     }
     if (fullDocumentSave.value && props.docname) {
       // A local working copy keeps the loaded revision and unsent fields while

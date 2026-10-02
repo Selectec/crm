@@ -72,8 +72,13 @@ native insertion. Every launch resets the explicit `fullDocumentSave` option to
 false unless supplied. A native Form Script controller may independently declare
 `get modalOptions() { return { fullDocumentSave: true } }`, including a
 document-dependent getter, to cover stock/global launchers for selected documents.
-The modal waits for the document and controller initialization before reading
-that option. This is a generic controller capability; CRM does not decide which
+The getter may return a Promise resolving `{ fullDocumentSave, readOnly }`, allowing
+an app to obtain authoritative native source permissions before exposing fields.
+The modal waits for the document, controller initialization and these options;
+a failed policy read displays its error with fields hidden and saving disabled.
+A controller's `readOnly: true` uses the existing full native viewer. Neither
+controller false values nor field overrides weaken an explicitly requested view.
+This is a generic controller capability; CRM does not decide which
 business documents require it. Controllers without that opt-in and ordinary
 Lead/Deal callers retain their native field-update path.
 
@@ -81,7 +86,9 @@ Accepted full saves run the existing native pending attachment deletion hook;
 rejected saves do not. Save controllers are awaited before the normal callback
 and close. If a save controller itself fails after the server accepted the
 document, the callback receives the accepted document and the modal retains the
-controller error without an unhandled rejection.
+controller error without an unhandled rejection. Native error controllers are
+also awaited and caught: their failure is shown alongside the original server
+rejection, preserving the unsent document.
 
 Component tests use fake transport to prove the complete loaded revision reaches
 the native save endpoint, rejected-save draft retention, realtime replacement,
