@@ -116,63 +116,65 @@
         />
       </div>
     </Resizer>
-    <Tabs
-      :class="{ 'record-panels-selected': panelSelected }"
-      v-model="tabIndex"
-      as="div"
-      :tabs="tabs"
-      class="flex flex-1 overflow-hidden flex-col [&_[role='tablist']]:gap-7.5 [&_[role='tablist']]:px-5 [&_[role='tablist']::-webkit-scrollbar]:h-0 [&_[role='tablist']]:min-h-[45px] [&_[role='tabpanel']:not([hidden])]:flex [&_[role='tabpanel']:not([hidden])]:grow"
-    >
-      <template #tab-item="{ tab, selected }">
-        <button
-          v-bind="panelTabAttributes(tab)"
-          class="group flex items-center gap-2 border-b border-transparent py-2.5 text-base text-ink-gray-5 duration-300 ease-in-out hover:text-ink-gray-9"
-          :class="{ 'text-ink-gray-9': selected }"
-        >
-          <Icon v-if="typeof tab.icon === 'string'" :icon="tab.icon" class="h-5 w-5" />
-          <component :is="tab.icon" v-else-if="tab.icon" class="h-5" />
-          {{ __(tab.label) }}
-          <Badge
-            v-if="tab.count !== undefined"
-            class="group-hover:bg-surface-gray-10"
-            :class="[selected ? 'bg-surface-gray-10' : 'bg-gray-600']"
-            variant="solid"
-            theme="gray"
-            size="sm"
+    <div class="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      <Tabs
+        :class="{ 'record-panels-selected': panelSelected }"
+        v-model="tabIndex"
+        as="div"
+        :tabs="tabs"
+        class="flex flex-1 overflow-hidden flex-col [&_[role='tablist']]:gap-7.5 [&_[role='tablist']]:px-5 [&_[role='tablist']::-webkit-scrollbar]:h-0 [&_[role='tablist']]:min-h-[45px] [&_[role='tabpanel']:not([hidden])]:flex [&_[role='tabpanel']:not([hidden])]:grow"
+      >
+        <template #tab-item="{ tab, selected }">
+          <button
+            v-bind="panelTabAttributes(tab)"
+            class="group flex items-center gap-2 border-b border-transparent py-2.5 text-base text-ink-gray-5 duration-300 ease-in-out hover:text-ink-gray-9"
+            :class="{ 'text-ink-gray-9': selected }"
           >
-            {{ tab.count }}
-          </Badge>
-        </button>
-      </template>
-      <template #tab-panel="{ tab }">
-        <DealsListView
-          v-if="tab.name === 'native:Deals' && rows.length"
-          class="mt-4"
-          :rows="rows"
-          :columns="columns"
-          :options="{ selectable: false, showTooltip: false }"
-        />
-        <ContactsListView
-          v-if="tab.name === 'native:Contacts' && rows.length"
-          class="mt-4"
-          :rows="rows"
-          :columns="columns"
-          :options="{ selectable: false, showTooltip: false }"
-        />
-        <EmptyState
-          v-if="!rows.length && ['native:Deals', 'native:Contacts'].includes(tab.name)"
-          :icon="tab.icon"
-          :name="__(tab.label)"
-        />
-      </template>
-    </Tabs>
-    <RecordPagePanels :groups="recordPanels" @retry="retryPanels" />
-    <p v-if="recordPanelsLoading && !recordPanels.length" role="status">{{ __('Loading panels...') }}</p>
-    <div v-if="recordPanelsError">
-      <ErrorMessage :message="recordPanelsError" />
-      <Button :label="__('Retry')" @click="retryPanels" />
+            <Icon v-if="typeof tab.icon === 'string'" :icon="tab.icon" class="h-5 w-5" />
+            <component :is="tab.icon" v-else-if="tab.icon" class="h-5" />
+            {{ __(tab.label) }}
+            <Badge
+              v-if="tab.count !== undefined"
+              class="group-hover:bg-surface-gray-10"
+              :class="[selected ? 'bg-surface-gray-10' : 'bg-gray-600']"
+              variant="solid"
+              theme="gray"
+              size="sm"
+            >
+              {{ tab.count }}
+            </Badge>
+          </button>
+        </template>
+        <template #tab-panel="{ tab }">
+          <DealsListView
+            v-if="tab.name === 'native:Deals' && rows.length"
+            class="mt-4"
+            :rows="rows"
+            :columns="columns"
+            :options="{ selectable: false, showTooltip: false }"
+          />
+          <ContactsListView
+            v-if="tab.name === 'native:Contacts' && rows.length"
+            class="mt-4"
+            :rows="rows"
+            :columns="columns"
+            :options="{ selectable: false, showTooltip: false }"
+          />
+          <EmptyState
+            v-if="!rows.length && ['native:Deals', 'native:Contacts'].includes(tab.name)"
+            :icon="tab.icon"
+            :name="__(tab.label)"
+          />
+        </template>
+      </Tabs>
+      <RecordPagePanels :groups="recordPanels" @retry="retryPanels" />
+      <p v-if="recordPanelsLoading && !recordPanels.length" role="status">{{ __('Loading panels...') }}</p>
+      <div v-if="recordPanelsError">
+        <ErrorMessage :message="recordPanelsError" />
+        <Button :label="__('Retry')" @click="retryPanels" />
+      </div>
+      <p v-for="(diagnostic, index) in recordPanelDiagnostics" :key="index" role="status">{{ diagnostic.message }}</p>
     </div>
-    <p v-for="(diagnostic, index) in recordPanelDiagnostics" :key="index" role="status">{{ diagnostic.message }}</p>
   </div>
   <ErrorPage
     v-else-if="errorTitle"

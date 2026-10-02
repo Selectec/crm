@@ -182,6 +182,47 @@ describe('existing native relationship pages',()=>{
 
 const appPanel=(app,id='summary')=>({key:`${app}:${id}`,id,owner_app:app,renderer:id,version:1,js:{url:`/assets/${app}/${id}.bundle.js`,revision:'one'},css:[],default_panel:id,panels:[{id,name:`${app}:${id}:${id}`,label:'Summary'}]})
 describe('generic contributor lifecycle',()=>{
+  for(const [Page,props] of [[Organization,{organizationId:'Same Name'}],[Contact,{contactId:'Same Name'}]]) it(`keeps native tabs and persistent rich content in one desktop column on ${Page.__name}`,async()=>{
+    fixture.contributions=[appPanel('demo')]
+    fixture.rendererFactory=runtime=>({props:['context'],setup(){const draft=runtime.ref('');return ()=>runtime.h('textarea',{'aria-label':'Column draft',value:draft.value,onInput:e=>draft.value=e.target.value})}})
+    await open(Page,props)
+    const panel=element.querySelector('section[data-crm-panel]')
+    const tabs=element.querySelector('[role="tablist"]').parentElement
+    const column=panel.parentElement
+    expect(tabs.parentElement).toBe(column)
+    expect(column.classList.contains('flex-col')).toBe(true)
+    expect(column.classList.contains('min-w-0')).toBe(true)
+    expect(column.parentElement.children).toHaveLength(2)
+    expect(element.querySelectorAll('[role="tablist"]')).toHaveLength(1)
+    expect(tabs.classList.contains('record-panels-selected')).toBe(true)
+    const composer=panel.querySelector('textarea');composer.value='Unsent';composer.dispatchEvent(new Event('input',{bubbles:true}));await settle()
+    const tabButtons=[...element.querySelectorAll('[role="tab"]')]
+    const deals=tabButtons.find(tab=>tab.textContent.trim().startsWith('Deals'))
+    deals.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));await settle()
+    expect(tabs.classList.contains('record-panels-selected')).toBe(false)
+    tabButtons[0].dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));await settle()
+    expect(panel.querySelector('textarea')).toBe(composer)
+    expect(composer.value).toBe('Unsent')
+  })
+  for(const [Page,props] of [[Organization,{organizationId:'Same Name'}],[Contact,{contactId:'Same Name'}],[MobileOrganization,{organizationId:'Same Name'}],[MobileContact,{contactId:'Same Name'}]]) it(`selects the declared default after overlapping cached-document discovery on ${Page.__name}`,async()=>{
+    const label=tab=>tab.getAttribute('aria-label') || tab.textContent.trim()
+    const pending=[]
+    fixture.discovery=context=>new Promise(resolve=>pending.push({context,resolve}))
+    await open(Page,props)
+    const record=[...fixture.documents.values()][0]
+    record.doc={...record.doc,modified:'Fresh HTTP response'};await settle()
+    expect(pending).toHaveLength(2)
+    const result=request=>({context:request.context,contributions:[appPanel('demo')],diagnostics:[]})
+    pending[1].resolve(result(pending[1]));await settle()
+    expect(label(element.querySelector('[role="tab"][aria-selected="true"]'))).toBe('Summary')
+    pending[0].resolve(result(pending[0]));await settle()
+    expect(label(element.querySelector('[role="tab"][aria-selected="true"]'))).toBe('Summary')
+    record.doc={...record.doc};await settle()
+    const deals=[...element.querySelectorAll('[role="tab"]')].find(tab=>label(tab).startsWith('Deals'))
+    deals.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));await settle()
+    pending[2].resolve(result(pending[2]));await settle()
+    expect(label(element.querySelector('[role="tab"][aria-selected="true"]')).startsWith('Deals')).toBe(true)
+  })
   for(const [Page,props] of [[Organization,{organizationId:'Same Name'}],[Contact,{contactId:'Same Name'}],[MobileOrganization,{organizationId:'Same Name'}],[MobileContact,{contactId:'Same Name'}]]) it(`coexists and removes contributors on ${Page.__name}`,async()=>{
     fixture.contributions=[appPanel('first'),appPanel('second')]
     const unmounted=[]

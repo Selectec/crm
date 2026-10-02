@@ -38,6 +38,7 @@ export function useRecordPagePanels({ record, scripts, nativeTabs, context }) {
   watch(selected, updateContexts)
   let generation = 0
   let typedOwner = ''
+  let selectionOwner = ''
   let disposed = false
   onUnmounted(() => { disposed = true; generation++ })
   async function discover(doc = record.doc) {
@@ -45,14 +46,14 @@ export function useRecordPagePanels({ record, scripts, nativeTabs, context }) {
     if (!doc?.doctype || !doc?.name) {
       groups.value = []
       typedOwner = ''
+      selectionOwner = ''
       loading.value = false
       diagnostics.value = []
       return
     }
     const typed = JSON.stringify([doc.doctype, doc.name])
     const changed = typed !== typedOwner
-    const previousSelection = selected.value
-    if (changed) { groups.value = []; typedOwner = typed }
+    if (changed) { groups.value = []; typedOwner = typed; selectionOwner = '' }
     loading.value = true
     error.value = ''
     try {
@@ -61,6 +62,7 @@ export function useRecordPagePanels({ record, scripts, nativeTabs, context }) {
       if (result.context?.doctype !== doc.doctype || result.context?.name !== doc.name) throw new Error('Record-page discovery returned a different record')
       diagnostics.value = result.diagnostics || []
       registry.approve(result.contributions)
+      const previousSelection = selected.value
       groups.value = result.contributions.map(descriptor => {
         const owner = JSON.stringify([typed, descriptor.key, descriptor.renderer, descriptor.version, descriptor.js, descriptor.css])
         const existing = groups.value.find(group => group.owner === owner)
@@ -71,7 +73,9 @@ export function useRecordPagePanels({ record, scripts, nativeTabs, context }) {
       })
       const defaults = groups.value.find(group => group.descriptor.default_panel)
       const fallback = nativeTabs[0]?.name
-      selectPanel(!changed && tabs.value.some(panel => panel.name === previousSelection) ? previousSelection : changed && defaults ? `${defaults.descriptor.key}:${defaults.descriptor.default_panel}` : fallback)
+      const initialSelection = selectionOwner !== typed
+      selectPanel(initialSelection && defaults ? `${defaults.descriptor.key}:${defaults.descriptor.default_panel}` : !initialSelection && tabs.value.some(panel => panel.name === previousSelection) ? previousSelection : fallback)
+      selectionOwner = typed
       updateContexts()
       await Promise.all(groups.value.map(async group => {
         if (group.component) return

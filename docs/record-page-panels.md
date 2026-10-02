@@ -33,8 +33,12 @@ component icons retain their existing path.
 
 Descriptors sort by `(order, owner_app, id)` before native panes. Competing default
 requests select the first ordered contribution with a visible diagnostic. Without
-a default, the existing first native pane remains selected. Invalid declarations
-produce diagnostics and do not remove other app or native panes. Duplicate
+a default, the existing first native pane remains selected.
+The default applies on the first successful discovery for a typed record, including
+overlapping discovery from a cached document and its fresh HTTP response. Later
+discoveries preserve the user's current selection, including changes made while
+discovery is pending. Invalid declarations produce diagnostics and do not remove
+other app or native panes. Duplicate
 contribution/local-panel identities and unsupported versions/targets are invalid.
 Normal Form Script header actions/statuses remain independently evaluated.
 
@@ -97,6 +101,8 @@ business reads while inactive and refresh when active again without discarding
 its unsent draft. Current parent permission never substitutes for source permission.
 
 Each contribution gets one persistent group outside native TabsContent parents.
+Desktop native Tabs, persistent groups and discovery states share one vertical
+content column beside the existing record information resizer.
 Contributed native tab buttons control that group through aria-controls; the
 active method labels it through aria-labelledby. Native pane associations remain
 unchanged.
