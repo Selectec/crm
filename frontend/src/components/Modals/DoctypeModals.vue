@@ -7,6 +7,7 @@
     :docname="doctypeModal.name.value"
     :defaults="doctypeModal.defaults.value"
     :readOnly="doctypeModal.readOnly.value"
+    :fullDocumentSave="doctypeModal.fullDocumentSave.value"
     @afterInsert="(d) => doctypeModal.triggerCallback('afterInsert', d)"
     @afterUpdate="(d) => doctypeModal.triggerCallback('afterUpdate', d)"
   />

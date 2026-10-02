@@ -17,7 +17,7 @@
           <div class="flex items-center gap-1">
             <CustomActions
               v-if="document.actions?.length"
-              :actions="document.actions"
+              :actions="editorDoc ? editorActions : document.actions"
               :close="() => (show = false)"
             />
             <Button
@@ -38,12 +38,13 @@
         </div>
         <div>
           <FieldLayout
-            v-if="layout.data"
+            v-if="layout.data && (!fullDocumentSave || !docname || editorDoc)"
             :tabs="layout.data"
             :data="doc"
             :doctype="doctype"
             :docname="docname"
             :readOnly="readOnly"
+            :context="editorDoc ? editorContext : null"
           />
           <ErrorMessage v-if="error" class="mt-4" :message="__(error)" />
         </div>
@@ -53,7 +54,14 @@
           <Button
             variant="solid"
             :label="editMode ? __('Update') : __('Create')"
-            :loading="editMode ? document.save.loading : create.loading"
+            :loading="
+              editMode
+                ? fullDocumentSave
+                  ? documentSave.loading
+                  : document.save.loading
+                : create.loading
+            "
+            :disabled="fullDocumentSave && editMode && !editorDoc"
             @click="editMode ? update() : create()"
           />
         </div>
@@ -82,6 +90,7 @@ const props = defineProps({
   docname: { type: String, default: '' },
   defaults: { type: Object, default: () => ({}) },
   readOnly: { type: Boolean, default: false },
+  fullDocumentSave: { type: Boolean, default: false },
 })
 
 const show = defineModel({ type: Boolean })
@@ -93,10 +102,54 @@ const router = useRouter()
 const { isManager } = usersStore()
 const { $dialog, $socket } = globalStore()
 
-const { document, scripts, triggerOnRender, triggerOnBeforeCreate } =
-  useDocument(props.doctype, props.docname || null)
+const {
+  document,
+  scripts,
+  triggerOnRender,
+  triggerOnBeforeCreate,
+  triggerOnValidate,
+  triggerOnSave,
+  triggerOnError,
+  triggerOnChange,
+  triggerButton,
+  triggerOnRowAdd,
+  triggerOnRowRemove,
+} = useDocument(props.doctype, props.docname || null)
 
-const doc = computed(() => document.doc || {})
+const editorDoc = ref(null)
+const doc = computed(() => editorDoc.value || document.doc || {})
+
+function editorTrigger(trigger) {
+  return async (...args) => {
+    const sharedDoc = document.doc
+    if (editorDoc.value) document.doc = editorDoc.value
+    try {
+      return await trigger?.(...args)
+    } finally {
+      if (document.doc === editorDoc.value) document.doc = sharedDoc
+    }
+  }
+}
+
+const editorActions = computed(() =>
+  (document.actions || []).map((action) => ({
+    ...action,
+    onClick: editorTrigger(action.onClick),
+  })),
+)
+
+const editorContext = {
+  get fieldPropertyOverrides() {
+    return document.fieldPropertyOverrides || {}
+  },
+  get fieldHtmlMap() {
+    return document.fieldHtmlMap || {}
+  },
+  triggerOnChange: editorTrigger(triggerOnChange),
+  triggerButton: editorTrigger(triggerButton),
+  triggerOnRowAdd: editorTrigger(triggerOnRowAdd),
+  triggerOnRowRemove: editorTrigger(triggerOnRowRemove),
+}
 
 const layout = createResource({
   url: 'crm.fcrm.doctype.crm_fields_layout.crm_fields_layout.get_fields_layout',
@@ -106,7 +159,11 @@ const layout = createResource({
 })
 
 const error = ref(null)
-const editMode = computed(() => Boolean(document.doc?.name))
+const editMode = computed(
+  () =>
+    Boolean(document.doc?.name) ||
+    (props.fullDocumentSave && Boolean(props.docname)),
+)
 
 const _create = createResource({
   url: 'frappe.client.insert',
@@ -142,8 +199,32 @@ async function create() {
   })
 }
 
-function update() {
+const documentSave = createResource({
+  url: 'frappe.client.save',
+  onSuccess: (d) => {
+    document.doc = d
+    editorDoc.value = d
+    triggerOnSave?.()
+    emit('afterUpdate', d)
+    show.value = false
+  },
+  onError: (err) => {
+    error.value = err.messages?.[0] || err.message || 'Could not update document'
+    editorTrigger(triggerOnError)()
+  },
+})
+
+async function update() {
   if (props.readOnly) return
+  if (props.fullDocumentSave) {
+    try {
+      await editorTrigger(triggerOnValidate)()
+      await documentSave.submit({ doc: { ...doc.value } })
+    } catch (err) {
+      error.value = err.messages?.[0] || err.message || 'Could not update document'
+    }
+    return
+  }
   document.save.submit(null, {
     onSuccess: (d) => {
       emit('afterUpdate', d)
@@ -179,10 +260,25 @@ watch(
 )
 
 onMounted(async () => {
-  document.doc = {
-    ...document.doc,
-    ...props.defaults,
+  if (props.fullDocumentSave && props.docname) {
+    // A local working copy keeps the loaded revision and unsent fields while
+    // the shared resource continues to receive realtime changes.
+    try {
+      await document.reload?.()
+      editorDoc.value = JSON.parse(
+        JSON.stringify({ ...document.doc, ...props.defaults }),
+      )
+      await editorTrigger(triggerOnRender)()
+    } catch (err) {
+      editorDoc.value = null
+      error.value = err.messages?.[0] || err.message || 'Could not load document'
+    }
+  } else {
+    document.doc = {
+      ...document.doc,
+      ...props.defaults,
+    }
+    await triggerOnRender()
   }
-  await triggerOnRender()
 })
 </script>

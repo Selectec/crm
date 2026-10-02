@@ -370,23 +370,31 @@ const formDocument = ref(null)
 const standaloneContext = inject('fieldLayoutContext', null)
 
 if (standaloneContext) {
-  // Standalone mode — no useDocument, no scripting triggers
-  // Field changes update data directly
-  triggerOnChange = async (fieldname, value, row) => {
-    if (row) {
-      row[fieldname] = value
-    } else {
-      data.value[fieldname] = value
-    }
-  }
-  triggerButton = async () => {}
+  // A supplied context owns its document and optional scripting handlers.
+  // Without handlers, standalone fields update their data directly.
+  triggerOnChange =
+    standaloneContext.triggerOnChange ||
+    (async (fieldname, value, row) => {
+      if (row) {
+        row[fieldname] = value
+      } else {
+        data.value[fieldname] = value
+      }
+    })
+  triggerButton = standaloneContext.triggerButton || (async () => {})
   formDocument.value = standaloneContext
 
-  // Provide no-op triggers for child Grid components
+  // Child grids use the supplied handlers, falling back to standalone no-ops.
   provide('triggerOnChange', triggerOnChange)
   provide('triggerButton', triggerButton)
-  provide('triggerOnRowAdd', async () => {})
-  provide('triggerOnRowRemove', async () => {})
+  provide(
+    'triggerOnRowAdd',
+    standaloneContext.triggerOnRowAdd || (async () => {}),
+  )
+  provide(
+    'triggerOnRowRemove',
+    standaloneContext.triggerOnRowRemove || (async () => {}),
+  )
   provide(
     'fieldPropertyOverrides',
     computed(() => standaloneContext?.fieldPropertyOverrides || {}),

@@ -42,7 +42,7 @@ capability to hide unavailable controls. Deletion still uses native
 `frappe.client.delete` and reloads its model resource; server permissions and
 lifecycle hooks remain authoritative.
 
-`showModal({ doctype, name, title, defaults, callbacks, readOnly })` launches the
+`showModal({ doctype, name, title, defaults, callbacks, readOnly, fullDocumentSave })` launches the
 native doctype modal. Its callbacks are `afterInsert(doc)` and `afterUpdate(doc)`.
 Use creation defaults for new records; omit them when opening an existing source
 to preserve its recorded references. Optional `readOnly: true` displays the full
@@ -51,3 +51,28 @@ field-script overrides cannot weaken the requested view mode. Native custom
 actions remain available for source navigation. Every launch resets the default
 to editable unless readOnly is explicitly supplied. This is presentation, not a
 permission grant or a replacement for native server-side write checks.
+
+Optional `fullDocumentSave: true` is intended for an existing document editor
+that must retain Frappe's native revision conflict check. The modal freshly reads
+the document, keeps a local working copy including its loaded `modified`, and
+sends that complete copy to `frappe.client.save`. Native field, row, button,
+render, validation, save and error controllers and the existing modal callbacks
+remain in use. A realtime update to the shared resource does not replace this
+editor's unsent fields or loaded revision. A rejected save leaves its error and
+draft visible; closing it does not put that draft into the shared cache. A failed
+initial read displays the error without exposing editable fields or enabling save.
+
+This uses Frappe's server-side `Document.save` / `check_if_latest` guard rather
+than adding an application conflict endpoint. The default existing-document path
+continues to use the native document resource's field update, and creation uses
+native insertion. Every launch resets `fullDocumentSave` to false unless supplied.
+It does not change Lead/Deal callers. The maintained opt-in proof covers native
+text, rich text and Link fields; pending attachment-file cleanup remains on the
+existing resource save path. Apps with attachment replacement need that native
+post-save integration before opting in.
+
+Component tests use fake transport to prove the complete loaded revision reaches
+the native save endpoint, rejected-save draft retention, realtime replacement,
+controller callbacks, failed reads and the next stock editor launch. Actual
+two-editor persistence/conflict acceptance must run against the built CRM and
+contributing app on the isolated test site.

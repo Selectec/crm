@@ -33,7 +33,14 @@ vi.mock('@/data/document', async () => {
       document: fixture.documents.get(key),
       permissions: { data: { permissions: { delete: false } } },
       scripts: { data: fixture.script ? [{script:fixture.script}] : [] },
-      triggerOnRender: async () => {}, triggerOnBeforeCreate: async () => {},
+      triggerOnRender: async () => { fixture.renderDocument?.(fixture.documents.get(key).doc) }, triggerOnBeforeCreate: async () => {},
+      triggerOnValidate: async () => { fixture.clientEvents?.push('validate') },
+      triggerOnSave: async () => { fixture.clientEvents?.push('save') },
+      triggerOnError: async () => { fixture.clientEvents?.push('error') },
+      triggerOnChange: async (fieldname, value, row) => {
+        fixture.clientEvents?.push(`change:${fieldname}`)
+        ;(row || fixture.documents.get(key).doc)[fieldname] = value
+      },
     }
   } }
 })
@@ -54,7 +61,13 @@ vi.mock('frappe-ui', async (original) => {
       if (options.url === 'crm.api.activities.get_activities') data = options.transform([[],[],[],[],[]])
       if (options.url.includes('get_sidepanel_sections')) data = []
       if (options.url.includes('get_fields_layout')) data = [{name:'main',label:'',sections:[{name:'note',label:'',columns:[{name:'one',fields:[{fieldname:'title',fieldtype:'Data',label:'Title',visible:true},{fieldname:'content',fieldtype:'Text Editor',label:'Content',visible:true}]}]}]}]
-      return reactive({data, reload() {}, submit: async () => {}, loading:false})
+      return reactive({data, reload() {}, submit: async (params) => {
+        if (options.url === 'frappe.client.save') {
+          fixture.nativeSaves.push(JSON.parse(JSON.stringify(params)))
+          if (fixture.saveResult) options.onSuccess?.(fixture.saveResult)
+          else options.onError?.({exc_type:'TimestampMismatchError',messages:['Document changed. Please refresh.']})
+        }
+      }, loading:false})
     },
   }
 })
@@ -106,6 +119,101 @@ async function open(Page, props) {
 }
 
 describe('existing native relationship pages',()=>{
+  it('shows an initial opt-in editor read failure without exposing fields or allowing insertion', async () => {
+    fixture.documents.set('FCRM Note:Unavailable Note',reactive({doc:{},reload:async()=>{throw new Error('Read permission unavailable')},save:{submit:vi.fn()},actions:[],fieldPropertyOverrides:{}}))
+    await open({render:()=>null},{})
+    useDoctypeModal().showModal({doctype:'FCRM Note',name:'Unavailable Note',title:'Note',fullDocumentSave:true})
+    await settle()
+    expect(document.body.textContent).toContain('Read permission unavailable')
+    expect(document.body.querySelector('input[placeholder="Title"]')).toBeNull()
+    const update = [...document.body.querySelectorAll('button')].find(button=>button.textContent==='Update')
+    expect(update?.disabled).toBe(true)
+  })
+  it('keeps render/save lifecycle hooks and callbacks for opt-in saving then restores the stock next launch', async () => {
+    const stockSave = vi.fn()
+    const callback = vi.fn()
+    fixture.nativeSaves = []
+    fixture.clientEvents = []
+    fixture.renderDocument = doc=>{doc.title='Rendered by the native controller'}
+    const loaded = {doctype:'FCRM Note',name:'Lifecycle Note',title:'Original',content:'<p>Full content</p>',modified:'2026-10-02 12:00:00.000001'}
+    fixture.saveResult = {...loaded,title:'Rendered by the native controller',modified:'2026-10-02 12:01:00.000001'}
+    fixture.documents.set('FCRM Note:Lifecycle Note',reactive({doc:loaded,save:{submit:stockSave},actions:[],fieldPropertyOverrides:{}}))
+    await open({render:()=>null},{})
+    useDoctypeModal().showModal({doctype:'FCRM Note',name:'Lifecycle Note',title:'Note',fullDocumentSave:true,callbacks:{afterUpdate:callback}})
+    await settle()
+    expect(document.body.querySelector('input[placeholder="Title"]').value).toBe('Rendered by the native controller')
+    ;[...document.body.querySelectorAll('button')].find(button=>button.textContent==='Update').click()
+    await settle()
+    expect(fixture.nativeSaves[0].doc.title).toBe('Rendered by the native controller')
+    expect(fixture.clientEvents).toEqual(['validate','save'])
+    expect(callback).toHaveBeenCalledWith(fixture.saveResult)
+    expect(useDoctypeModal().show.value).toBe(false)
+    fixture.renderDocument = null
+    fixture.saveResult = null
+    fixture.clientEvents = null
+    useDoctypeModal().showModal({doctype:'FCRM Note',name:'Lifecycle Note',title:'Note'})
+    await settle()
+    expect(useDoctypeModal().fullDocumentSave.value).toBe(false)
+    ;[...document.body.querySelectorAll('button')].find(button=>button.textContent==='Update').click()
+    await settle()
+    expect(stockSave).toHaveBeenCalledTimes(1)
+    expect(fixture.nativeSaves).toHaveLength(1)
+  })
+  it('preserves an open draft and loaded revision across a realtime document replacement while running field hooks', async () => {
+    fixture.nativeSaves = []
+    fixture.clientEvents = []
+    const loaded = {doctype:'FCRM Note',name:'Draft Note',title:'Before editing',content:'<p>Complete loaded content</p>',modified:'2026-10-02 12:00:00.000001'}
+    const resource = reactive({doc:{...loaded},save:{submit:vi.fn()},actions:[],fieldPropertyOverrides:{}})
+    fixture.documents.set('FCRM Note:Draft Note', resource)
+    await open({render:()=>null},{})
+    useDoctypeModal().showModal({doctype:'FCRM Note',name:'Draft Note',title:'Note',fullDocumentSave:true})
+    await settle()
+    const input = document.body.querySelector('input[placeholder="Title"]')
+    input.value = 'Unsent draft'
+    input.dispatchEvent(new Event('input',{bubbles:true}))
+    input.dispatchEvent(new Event('change',{bubbles:true}))
+    await settle()
+    expect(input.value).toBe('Unsent draft')
+    resource.doc = {...loaded,title:'Other editor won',content:'<p>Remote content</p>',modified:'2026-10-02 12:01:00.000001'}
+    await settle()
+    expect(input.value).toBe('Unsent draft')
+    expect(document.body.textContent).toContain('Complete loaded content')
+    const update = [...document.body.querySelectorAll('button')].find(button=>button.textContent==='Update')
+    update.click()
+    await settle()
+    expect(fixture.nativeSaves).toEqual([{doc:{...loaded,title:'Unsent draft'}}])
+    expect(fixture.clientEvents).toContain('change:title')
+    expect(fixture.clientEvents).toContain('validate')
+    expect(fixture.clientEvents).toContain('error')
+    expect(input.value).toBe('Unsent draft')
+    expect(useDoctypeModal().show.value).toBe(true)
+    fixture.clientEvents = null
+    useDoctypeModal().show.value = false
+    await settle()
+    useDoctypeModal().showModal({doctype:'FCRM Note',name:'Draft Note',title:'Note'})
+    await settle()
+    expect(document.body.querySelector('input[placeholder="Title"]').value).toBe('Other editor won')
+  })
+  it('opts into native full-document saving with the loaded revision and keeps a rejected editor open', async () => {
+    const stockSave = vi.fn()
+    fixture.nativeSaves = []
+    fixture.documents.set('FCRM Note:Revision Note', reactive({
+      doc:{doctype:'FCRM Note',name:'Revision Note',title:'Loaded title',content:'<p>Loaded content</p>',modified:'2026-10-02 12:00:00.000001'},
+      save:{submit:stockSave},actions:[],fieldPropertyOverrides:{},
+    }))
+    await open({render:()=>null},{})
+    useDoctypeModal().showModal({doctype:'FCRM Note',name:'Revision Note',title:'Note',fullDocumentSave:true})
+    await settle()
+    const update = [...document.body.querySelectorAll('button')].find(button=>button.textContent==='Update')
+    expect(update).toBeDefined()
+    update.click()
+    await settle()
+    expect(fixture.nativeSaves).toEqual([{doc:{doctype:'FCRM Note',name:'Revision Note',title:'Loaded title',content:'<p>Loaded content</p>',modified:'2026-10-02 12:00:00.000001'}}])
+    expect(stockSave).not.toHaveBeenCalled()
+    expect(document.body.textContent).toContain('Document changed. Please refresh.')
+    expect(useDoctypeModal().show.value).toBe(true)
+    expect(document.body.querySelector('[contenteditable="true"]')).not.toBeNull()
+  })
   for(const [label,Page,props,context,related] of [
     ['Organization',Organization,{organizationId:'Same Name'},'CRM Organization',['Deals','Contacts']],
     ['Contact',Contact,{contactId:'Same Name'},'Contact',['Deals']],
