@@ -9,6 +9,8 @@ import MobileContact from '@/pages/MobileContact.vue'
 import translationPlugin from '@/translation'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
 import DeleteLinkedDocModal from '@/components/DeleteLinkedDocModal.vue'
+import Activities from '@/components/Activities/Activities.vue'
+import NoteArea from '@/components/Activities/NoteArea.vue'
 import DoctypeModals from '@/components/Modals/DoctypeModals.vue'
 import { useDoctypeModal } from '@/composables/doctypeModal'
 
@@ -47,22 +49,25 @@ vi.mock('frappe-ui', async (original) => {
       fixture.requests.push(options.url)
       let data = []
       if (options.url.includes('get_sidepanel_sections')) data = []
-      if (options.url.includes('get_fields_layout')) data = [{name:'main',label:'',sections:[{name:'note',label:'',columns:[{name:'one',fields:[{fieldname:'title',fieldtype:'Data',label:'Title',visible:true}]}]}]}]
+      if (options.url.includes('get_fields_layout')) data = [{name:'main',label:'',sections:[{name:'note',label:'',columns:[{name:'one',fields:[{fieldname:'title',fieldtype:'Data',label:'Title',visible:true},{fieldname:'content',fieldtype:'Text Editor',label:'Content',visible:true}]}]}]}]
       return reactive({data, reload() {}, submit: async () => {}, loading:false})
     },
   }
 })
-vi.mock('@/stores/settings', () => ({ getSettings: () => ({brand: {}}) }))
+vi.mock('@/stores/settings', async () => {
+  const { reactive, ref } = await import('vue')
+  const settings = { brand: reactive({}), settings: ref({}), _settings: reactive({doc:{}}) }
+  return { getSettings: () => settings }
+})
 vi.mock('@/stores/global', () => ({ globalStore: () => ({$socket:{on(){},off(){},emit(){}},$dialog(){},makeCall(){}}) }))
 vi.mock('@/stores/users', () => ({ usersStore: () => ({isManager:()=>false,getUser:()=>({full_name:'Staff'})}) }))
 vi.mock('@/stores/statuses', () => ({ statusesStore: () => ({getDealStatus:()=>({})}) }))
 vi.mock('@/stores/organizations', () => ({ organizationsStore: () => ({getOrganization:()=>({})}) }))
 vi.mock('@/stores/meta', () => ({ getMeta: () => ({doctypeMeta: {value:{}},getFields:()=>[],getField:()=>({}),getMeta:()=>({})}) }))
 vi.mock('@/utils/view', () => ({ getView: () => null }))
-vi.mock('@/composables/whatsapp', () => ({whatsappEnabled:{value:false}}))
+vi.mock('@/composables/whatsapp', async () => ({whatsappEnabled:(await import('vue')).ref(false)}))
 vi.mock('@/composables/telephony', () => ({callEnabled:{value:false}}))
 vi.mock('@/composables/useContactFields', () => ({useContactFields:()=>section=>section}))
-vi.mock('@/composables/useTimelinePreferences', () => ({timestampCell:value=>value,useTimelinePreferences:()=>({isNewestFirst:{value:false}})}))
 vi.mock('frappe-ui/frappe', () => ({useTelemetry:()=>({capture(){}}),useOnboarding:()=>({updateOnboardingStep(){}})}))
 vi.mock('@/components/SidePanelLayout.vue', () => ({default:{render:()=>h('aside','Record information')}}))
 vi.mock('@/components/Resizer.vue', () => ({default:{render(){return h('div',this.$slots.default?.())}}}))
@@ -126,3 +131,60 @@ describe('existing native relationship pages',()=>{
   })
 })
 
+
+// Native rendering remains unchanged; the application owns authorised typed reads.
+describe('native relationship activity resource', () => {
+  it('distinguishes a failed source load from an empty native history and supports retry', async () => {
+    const router = createRouter({history:createMemoryHistory(),routes:[{path:'/',component:{render:()=>null}}]})
+    await router.push('/'); await router.isReady()
+    const resource = reactive({data:null,loading:false,error:new Error('Relationship history unavailable'),reload:vi.fn()})
+    fixture.requests = []
+    element = document.createElement('div'); document.body.append(element)
+    app = createApp({render:()=>h(Activities,{doctype:'Contact',docname:'Same Name',tabs:[{name:'Notes'}],adapter:{resource,doc:{name:'Same Name'},actions:{}}},{header:()=>null})})
+    app.use(router); app.use(translationPlugin)
+    for (const [name,component] of Object.entries({Button,ErrorMessage,Badge})) app.component(name,component)
+    app.mount(element); await settle()
+    expect(element.textContent).toContain('Relationship history unavailable')
+    expect(element.textContent).not.toContain('No Notes Found')
+    expect(fixture.requests).not.toContain('crm.api.activities.get_activities')
+    const retry = [...element.querySelectorAll('button')].find(button=>button.textContent==='Retry')
+    retry.click(); expect(resource.reload).toHaveBeenCalledOnce()
+  })
+})
+
+describe('native source permission capabilities', () => {
+  it('hides native note deletion when unavailable while preserving the default action', async () => {
+    const props = reactive({
+      note:{name:'Shared Note',title:'Shared title',content:'<p>Complete shared note content</p>',owner:'Staff',modified:'2026-10-02 10:00:00'},
+      canDelete:false,
+    })
+    await open({render:()=>h(NoteArea,props)}, {})
+    expect(element.textContent).toContain('Shared title')
+    expect(element.textContent).toContain('Complete shared note content')
+    expect(element.querySelector('button')).toBeNull()
+    delete props.canDelete
+    await settle()
+    expect(element.querySelector('button')).not.toBeNull()
+  })
+  it('opens a complete note read-only and resets to the existing editable default on the next launch', async () => {
+    fixture.documents.set('FCRM Note:Shared Note', reactive({
+      doc:{doctype:'FCRM Note',name:'Shared Note',title:'Shared title',content:'<p>Complete shared note content</p>'},
+      save:{submit:vi.fn()},actions:[],fieldPropertyOverrides:{title:{read_only:false},content:{read_only:false}},
+    }))
+    await open({render:()=>null}, {})
+    useDoctypeModal().showModal({doctype:'FCRM Note',name:'Shared Note',title:'Note',readOnly:true})
+    await settle()
+    expect(document.body.textContent).toContain('View Note')
+    expect(document.body.textContent).toContain('Complete shared note content')
+    expect([...document.body.querySelectorAll('button')].some(button=>button.textContent==='Update')).toBe(false)
+    expect(document.body.querySelector('input[placeholder="Title"]').disabled).toBe(true)
+    expect(document.body.querySelector('[contenteditable="true"]')).toBeNull()
+    useDoctypeModal().show.value=false; await settle()
+    useDoctypeModal().showModal({doctype:'FCRM Note',name:'Shared Note',title:'Note'})
+    await settle()
+    expect(document.body.textContent).toContain('Edit Note')
+    expect([...document.body.querySelectorAll('button')].some(button=>button.textContent==='Update')).toBe(true)
+    expect(document.body.querySelector('input[placeholder="Title"]').disabled).toBe(false)
+    expect(document.body.querySelector('[contenteditable="true"]')).not.toBeNull()
+  })
+})

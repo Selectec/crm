@@ -39,6 +39,7 @@ const props = defineProps({
   docname: { type: String, default: '' },
   isGridRow: { type: Boolean, default: false },
   preview: { type: Boolean, default: false },
+  readOnly: { type: Boolean, default: false },
   context: { type: Object, default: null },
 })
 
@@ -95,6 +96,7 @@ provide('hasTabs', hasTabs)
 provide('doctype', props.doctype)
 provide('docname', resolvedDocname)
 provide('preview', props.preview)
+provide('readOnly', computed(() => props.readOnly))
 provide('isGridRow', props.isGridRow)
 provide('fieldLayoutContext', props.context)
 </script>

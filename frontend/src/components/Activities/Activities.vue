@@ -1,5 +1,7 @@
 <template>
+  <slot name="header" :doc="doc" :method="title" :resource="all_activities">
   <ActivityHeader
+    v-if="!adapter"
     v-model="tabIndex"
     v-model:showWhatsappTemplates="showWhatsappTemplates"
     v-model:showFilesUploader="showFilesUploader"
@@ -10,6 +12,7 @@
     :whatsappBox="whatsappBox"
     :modalRef="modalRef"
   />
+  </slot>
   <FadedScrollableDiv class="flex flex-col h-full overflow-y-auto">
     <div
       v-if="all_activities?.loading"
@@ -17,6 +20,10 @@
     >
       <LoadingIndicator class="h-6 w-6" />
       <span>{{ __('Loading...') }}</span>
+    </div>
+    <div v-else-if="all_activities?.error" class="px-3 py-5 sm:px-10" role="alert">
+      <ErrorMessage :message="all_activities.error.message || all_activities.error" />
+      <Button class="mt-3" :label="__('Retry')" @click="all_activities.reload()" />
     </div>
     <div
       v-else-if="
@@ -391,7 +398,8 @@
       :top="top"
     />
   </FadedScrollableDiv>
-  <div>
+  <slot name="composer" :doc="doc" :method="title" :resource="all_activities">
+  <div v-if="!adapter">
     <CommunicationArea
       v-if="['Emails', 'Comments', 'Activity'].includes(title)"
       ref="emailBox"
@@ -410,19 +418,22 @@
       @scroll="scroll"
     />
   </div>
+  </slot>
   <WhatsappTemplateSelectorModal
-    v-if="whatsappEnabled"
+    v-if="!adapter && whatsappEnabled"
     v-model="showWhatsappTemplates"
     :doctype="doctype"
     @send="(t) => sendTemplate(t)"
   />
   <AllModals
+    v-if="!adapter"
     ref="modalRef"
     v-model="all_activities"
     :doctype="doctype"
     :doc="doc"
   />
   <FilesUploader
+    v-if="!adapter"
     v-model="showFilesUploader"
     :doctype="doctype"
     :docname="docname"
@@ -478,7 +489,7 @@ import { useTimelinePreferences } from '@/composables/useTimelinePreferences'
 import { whatsappEnabled } from '@/composables/whatsapp'
 import { useDocument } from '@/data/document'
 import { useTelemetry } from 'frappe-ui/frappe'
-import { Button, createResource, toast } from 'frappe-ui'
+import { Button, ErrorMessage, createResource, toast } from 'frappe-ui'
 import { useElementVisibility } from '@vueuse/core'
 import {
   ref,
@@ -501,6 +512,8 @@ const props = defineProps({
   doctype: { type: String, default: 'CRM Lead' },
   docname: { type: String, default: '' },
   tabs: { type: Array, default: () => [] },
+  // The owning application supplies typed, permission-filtered native data.
+  adapter: { type: Object, default: null },
 })
 
 const emit = defineEmits(['beforeSave', 'afterSave'])
@@ -510,12 +523,14 @@ const route = useRoute()
 const reload = defineModel('reload', { type: Boolean, default: false })
 const tabIndex = defineModel('tabIndex', { type: Number, default: 0 })
 
-const { document: _document } = useDocument(props.doctype, props.docname)
+const _document = props.adapter
+  ? { doc: props.adapter.doc, reload: () => props.adapter.reloadDoc?.() }
+  : useDocument(props.doctype, props.docname).document
 
 const doc = computed(() => _document.doc || {})
 
 const reload_email = ref(false)
-const modalRef = ref(null)
+const modalRef = props.adapter ? computed(() => props.adapter.actions) : ref(null)
 const showFilesUploader = ref(false)
 
 const title = computed(() => props.tabs?.[tabIndex.value]?.name || 'Activity')
@@ -527,7 +542,7 @@ const changeTabTo = (tabName) => {
   tabIndex.value = index
 }
 
-const all_activities = createResource({
+const all_activities = props.adapter?.resource || createResource({
   url: 'crm.api.activities.get_activities',
   params: { name: props.docname },
   cache: ['activity', props.docname],
@@ -555,7 +570,7 @@ const whatsappMessages = createResource({
 watch(
   whatsappEnabled,
   (enabled) => {
-    if (enabled) whatsappMessages.fetch()
+    if (enabled && !props.adapter) whatsappMessages.fetch()
   },
   { immediate: true },
 )
@@ -619,7 +634,7 @@ const replyMessage = ref({})
 
 function get_activities() {
   if (!all_activities.data?.versions) return []
-  if (!all_activities.data?.calls.length)
+  if (!all_activities.data?.calls?.length)
     return all_activities.data.versions || []
   return [...all_activities.data.versions, ...all_activities.data.calls]
 }

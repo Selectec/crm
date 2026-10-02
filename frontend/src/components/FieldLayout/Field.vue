@@ -344,6 +344,7 @@ const data = inject('data')
 const doctype = inject('doctype')
 const docname = inject('docname', null)
 const preview = inject('preview')
+const readOnly = inject('readOnly', ref(false))
 const isGridRow = inject('isGridRow')
 
 // Guard getMeta — skip when doctype is empty (inline/standalone mode)
@@ -507,11 +508,12 @@ const field = computed(() => {
 
   // Script overrides for read_only take priority over depends_on
   const scriptReadOnly = overrides?.read_only
-  const effectiveReadOnly =
+  const effectiveReadOnly = readOnly.value || (
     scriptReadOnly !== undefined
       ? scriptReadOnly
       : field.read_only ||
         (field.read_only_depends_on && read_only_via_depends_on)
+  )
 
   // Script overrides for depends_on visibility
   const scriptHidden = overrides?.hidden
@@ -589,6 +591,7 @@ const getOptions = (options) => {
 }
 
 async function handleButtonClick(field) {
+  if (readOnly.value) return
   if (typeof field.click === 'function') {
     return await field.click(data.value)
   } else {
@@ -597,6 +600,7 @@ async function handleButtonClick(field) {
 }
 
 async function fieldChange(value, df) {
+  if (readOnly.value) return
   value = Array.isArray(value)
     ? value
     : typeof value === 'object' && value !== null && 'value' in value

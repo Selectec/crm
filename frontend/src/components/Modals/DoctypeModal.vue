@@ -6,7 +6,9 @@
           <div class="flex gap-2 items-center">
             <h3 class="text-3xl-semibold leading-6 text-ink-gray-9">
               {{
-                editMode
+                readOnly
+                  ? __('View ' + (doctypeTitle || doctype))
+                  : editMode
                   ? __('Edit ' + (doctypeTitle || doctype))
                   : __('Create ' + (doctypeTitle || doctype))
               }}
@@ -19,7 +21,7 @@
               :close="() => (show = false)"
             />
             <Button
-              v-if="isManager() && !isMobileView"
+              v-if="!readOnly && isManager() && !isMobileView"
               variant="ghost"
               class="w-7"
               :tooltip="__('Edit Fields Layout')"
@@ -41,11 +43,12 @@
             :data="doc"
             :doctype="doctype"
             :docname="docname"
+            :readOnly="readOnly"
           />
           <ErrorMessage v-if="error" class="mt-4" :message="__(error)" />
         </div>
       </div>
-      <div class="px-4 pb-7 pt-4 sm:px-6">
+      <div v-if="!readOnly" class="px-4 pb-7 pt-4 sm:px-6">
         <div class="flex flex-row-reverse gap-2">
           <Button
             variant="solid"
@@ -78,6 +81,7 @@ const props = defineProps({
   doctype: { type: String, default: '' },
   docname: { type: String, default: '' },
   defaults: { type: Object, default: () => ({}) },
+  readOnly: { type: Boolean, default: false },
 })
 
 const show = defineModel({ type: Boolean })
@@ -127,6 +131,7 @@ const _create = createResource({
 })
 
 async function create() {
+  if (props.readOnly) return
   await triggerOnBeforeCreate?.()
 
   _create.submit({
@@ -138,6 +143,7 @@ async function create() {
 }
 
 function update() {
+  if (props.readOnly) return
   document.save.submit(null, {
     onSuccess: (d) => {
       emit('afterUpdate', d)
