@@ -12,6 +12,7 @@ import DeleteLinkedDocModal from '@/components/DeleteLinkedDocModal.vue'
 import Activities from '@/components/Activities/Activities.vue'
 import NoteArea from '@/components/Activities/NoteArea.vue'
 import TaskArea from '@/components/Activities/TaskArea.vue'
+import CallArea from '@/components/Activities/CallArea.vue'
 import DoctypeModals from '@/components/Modals/DoctypeModals.vue'
 import { useDoctypeModal } from '@/composables/doctypeModal'
 import { useAttachments } from '@/composables/useAttachments'
@@ -80,6 +81,7 @@ vi.mock('frappe-ui', async (original) => {
       fixture.requestOptions.push(options)
       let data = []
       if (options.url === 'crm.api.activities.get_activities') data = options.transform([[],[],[],[],[]])
+      if (options.url === 'crm.fcrm.doctype.crm_call_log.crm_call_log.get_call_log') data = fixture.callLog
       if (options.url.includes('get_sidepanel_sections')) data = []
       if (options.url.includes('get_fields_layout')) data = [{name:'main',label:'',sections:[{name:'note',label:'',columns:[{name:'one',fields:[{fieldname:'title',fieldtype:'Data',label:'Title',visible:true},{fieldname:'content',fieldtype:'Text Editor',label:'Content',visible:true}]}]}]}]
       return reactive({data, reload() {}, submit: async (params) => {
@@ -128,7 +130,7 @@ vi.mock('@/components/DeleteLinkedDocModal.vue', () => ({default:{render:()=>nul
 
 let app, element
 async function settle() { for(let i=0;i<8;i++) { await nextTick(); await new Promise(resolve=>setTimeout(resolve,0)) } }
-afterEach(()=>{app?.unmount();element?.remove();document.body.innerHTML='';fixture.documents.clear();fixture.script=null;fixture.contributions=null;fixture.rendererFactory=null;fixture.discovery=null;fixture.loadFailure=null;fixture.rendererLoad=null;fixture.nativeControllers=false;fixture.controllerScript=null;fixture.controllerPause=null;fixture.enabled=true;useDoctypeModal().show.value=false;fieldLayoutDialogs.value=[];vi.unstubAllGlobals()})
+afterEach(()=>{app?.unmount();element?.remove();document.body.innerHTML='';fixture.documents.clear();fixture.script=null;fixture.callLog=null;fixture.contributions=null;fixture.rendererFactory=null;fixture.discovery=null;fixture.loadFailure=null;fixture.rendererLoad=null;fixture.nativeControllers=false;fixture.controllerScript=null;fixture.controllerPause=null;fixture.enabled=true;useDoctypeModal().show.value=false;fieldLayoutDialogs.value=[];vi.unstubAllGlobals()})
 async function open(Page, props) {
   const router=createRouter({history:createMemoryHistory(),routes:[{path:'/',name:'Test',component:{render:()=>null}},{path:'/organizations',name:'Organizations',component:{render:()=>null}},{path:'/contacts',name:'Contacts',component:{render:()=>null}},{path:'/organizations/:organizationId',name:'Organization',component:{render:()=>null}},{path:'/contacts/:contactId',name:'Contact',component:{render:()=>null}}]})
   await router.push('/');await router.isReady()
@@ -712,6 +714,62 @@ describe('native relationship activity resource', () => {
 })
 
 describe('native source permission capabilities', () => {
+  async function openCall(editorDefaults) {
+    fixture.callLog=reactive({
+      name:'Native Call',id:'Native Call',type:'Outgoing',status:'Completed',duration:90,_duration:'1m 30s',
+      creation:'2026-10-02 10:00:00',caller:'Staff',receiver:'Person',
+      _caller:{label:'Staff'},_receiver:{label:'Person'},_notes:[],_tasks:[],
+    })
+    await open({render:()=>h(CallArea,{activity:fixture.callLog,...(editorDefaults ? {editorDefaults} : {})})},{})
+    element.querySelector('.border.cursor-pointer').click()
+    await settle()
+    expect(document.body.textContent).toContain('Call Details')
+  }
+  async function callAction(label) {
+    const dialog=[...document.body.querySelectorAll('[role="dialog"]')]
+      .find(dialog=>dialog.textContent.includes('Call Details'))
+    dialog.querySelector('button[aria-haspopup="menu"]').click()
+    await settle()
+    const action=[...document.body.querySelectorAll('[role="menuitem"]')]
+      .find(item=>item.textContent.trim()===label)
+    expect(action).toBeDefined()
+    action.click()
+    await settle()
+  }
+  it('passes caller creation defaults through the native Call card to Note and Task editors without changing existing sources', async () => {
+    const defaults={reference_doctype:'Other Record',reference_docname:'Source/with spaces',custom_context:'opaque',status:'Todo',priority:'High'}
+    await openCall(defaults)
+    await callAction('Add Note')
+    const modal=useDoctypeModal()
+    expect(modal.doctype.value).toBe('FCRM Note')
+    expect(modal.name.value).toBeNull()
+    expect(modal.defaults.value).toEqual(defaults)
+    expect(modal.defaults.value).not.toBe(defaults)
+    modal.show.value=false
+    await settle()
+    await callAction('Add Task')
+    expect(modal.doctype.value).toBe('CRM Task')
+    expect(modal.defaults.value).toEqual(defaults)
+    modal.show.value=false
+    await settle()
+    fixture.callLog._notes=[{name:'Existing Note',title:'Existing note content'}]
+    fixture.documents.set('FCRM Note:Existing Note',reactive({doc:{doctype:'FCRM Note',name:'Existing Note',title:'Existing note content'},actions:[],fieldPropertyOverrides:{}}))
+    await settle()
+    await callAction('Edit Note')
+    expect(modal.name.value).toBe('Existing Note')
+    expect(modal.defaults.value).toEqual({})
+    expect(defaults.reference_docname).toBe('Source/with spaces')
+  })
+  it('preserves ordinary Call editor defaults when no creation context is supplied', async () => {
+    await openCall()
+    await callAction('Add Note')
+    const modal=useDoctypeModal()
+    expect(modal.defaults.value).toEqual({})
+    modal.show.value=false
+    await settle()
+    await callAction('Add Task')
+    expect(modal.defaults.value).toEqual({status:'Backlog',priority:'Low'})
+  })
   it('honors independent native Task card controls while preserving default workflow actions', async () => {
     const task={name:171,title:'Shared Task title',assigned_to:'staff@example.test',priority:'Medium',status:'Todo'}
     const actions={showTask:vi.fn(),updateTaskStatus:vi.fn(),deleteTask:vi.fn()}
