@@ -89,6 +89,9 @@ export default defineConfig(async ({ mode }) => {
       // source through the native Vite plugin rather than esbuild prebundling.
       exclude: ['frappe-ui'],
       include: [
+        // Prebundle Reka with its own VueUse 14 dependency, rather than letting
+        // its raw imports reuse the app's optimized VueUse 10 dependency.
+        'reka-ui',
         'feather-icons',
         'tailwind.config.js',
         'prosemirror-state',

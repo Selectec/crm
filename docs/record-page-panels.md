@@ -135,11 +135,20 @@ resolves them when serving source, while the esbuild dependency optimizer cannot
 bundle them. The exclusion also covers package subpaths and keeps the existing
 native plugin, dependency includes and single-runtime deduplication in place.
 CommonJS dependencies still require optimization; `feather-icons` is already
-included. Add another explicit include only for a demonstrated raw CommonJS
-failure. This configuration affects development, not production bundling.
+included. `reka-ui` is also explicitly optimized: installed Reka 2.10.1 depends on
+VueUse 14 (nested 14.2.1), while this app uses VueUse 10.11.1. Serving Reka's raw
+source allowed its bare VueUse import to reuse the optimized app dependency. The
+native TabsIndicator passes a computed array to `useResizeObserver`; VueUse 10
+does not unwrap that array before choosing observer targets and tries to observe
+the array itself. The actual development stack confirmed that failure in the
+app's optimized VueUse 10 code. Prebundling Reka resolves its dependency with the
+correct importer context, retaining both declared versions and existing Vue
+deduplication. This configuration affects development, not production bundling.
 
 See the [installed Frappe UI plugin](https://github.com/frappe/frappe-ui/blob/v1.0.0-beta.29/vite/index.js)
 and [Vite 5 optimizer contract](https://github.com/vitejs/vite/blob/v5.4.21/docs/config/dep-optimization-options.md).
+The [current Frappe UI plugin](https://github.com/frappe/frappe-ui/blob/main/vite/index.js)
+also explicitly includes `reka-ui`; this older installed plugin does not.
 Recheck the exclusion when upgrading those versions: newer Frappe UI source has
 changed its icon and optimizer defaults. Native startup and real-page
 development proof must verify this workaround; production success alone is
