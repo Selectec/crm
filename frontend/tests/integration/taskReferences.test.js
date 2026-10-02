@@ -66,7 +66,9 @@ async function open(doctype, docname = 'SAME/& identity') {
   app = createApp({ render: () => h(RouterView) })
   app.use(router)
   app.use(translationPlugin)
-  app.component('Button', Button)
+  for (const [name, component] of Object.entries({ Button })) {
+    app.component(name, component)
+  }
   app.mount(element)
   for (let count = 0; count < 6; count++) {
     await nextTick()
