@@ -123,15 +123,11 @@
       <div class="flex gap-2 items-center justify-between">
         <div>
           <Button
-            v-if="getRow(itemName, 'reference_docname').label"
+            v-if="referenceTarget(itemName)"
             class="-ml-2"
             variant="ghost"
             size="sm"
-            :label="
-              getRow(itemName, 'reference_doctype').label == 'CRM Deal'
-                ? __('Deal')
-                : __('Lead')
-            "
+            :label="__(referenceTarget(itemName).name)"
             :iconRight="ArrowUpRightIcon"
             @click.stop="
               redirect(
@@ -199,6 +195,7 @@ import { useDoctypeModal } from '@/composables/doctypeModal'
 import { getMeta } from '@/stores/meta'
 import { usersStore } from '@/stores/users'
 import { formatDate } from '@/utils'
+import { getRecordRoute } from '@/utils/recordRoute'
 import { timestampCell } from '@/composables/useTimelinePreferences'
 import { useOnboarding, useTelemetry } from 'frappe-ui/frappe'
 import { Tooltip, Avatar, TextEditor, Dropdown, call } from 'frappe-ui'
@@ -377,14 +374,16 @@ async function deleteTask(name) {
   })
 }
 
+function referenceTarget(itemName) {
+  return getRecordRoute(
+    getRow(itemName, 'reference_doctype').label,
+    getRow(itemName, 'reference_docname').label,
+  )
+}
+
 function redirect(doctype, docname) {
-  if (!docname) return
-  let name = doctype == 'CRM Deal' ? 'Deal' : 'Lead'
-  let params = { leadId: docname }
-  if (name == 'Deal') {
-    params = { dealId: docname }
-  }
-  router.push({ name: name, params: params })
+  const target = getRecordRoute(doctype, docname)
+  if (target) router.push(target)
 }
 
 const openTaskFromURL = () => {

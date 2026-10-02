@@ -1,6 +1,12 @@
 # Native rendering and editor facade
 
 Generic installed-app registration is documented in [Record-page panels](record-page-panels.md).
+
+Native Task Kanban source shortcuts use the existing typed Lead, Deal,
+Organisation and Contact routes. The button label follows that native record
+page; clicking it does not open the Task editor. Unknown Dynamic Link targets
+and missing source names have no record shortcut, rather than falling back to
+a Lead route. Form Script controllers continue to own modal source actions.
 The former relationshipActivity Form Script registration has been removed. Normal
 Form Script actions/statuses and the native components below remain independent.
 
