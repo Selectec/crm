@@ -85,6 +85,9 @@ export default defineConfig(async ({ mode }) => {
       ],
     },
     optimizeDeps: {
+      // Installed frappe-ui beta.29 contains virtual lucide imports. Serve its
+      // source through the native Vite plugin rather than esbuild prebundling.
+      exclude: ['frappe-ui'],
       include: [
         'feather-icons',
         'tailwind.config.js',

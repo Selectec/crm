@@ -128,6 +128,23 @@ revision/typed-owner remounting and draft retention across methods/native tabs a
 record reload, plus native Lead/Deal adapter/editor defaults and independent actions.
 These are maintained contract tests, not site registration or real persistence proof.
 
+The pinned Vite 5.4.21 / frappe-ui 1.0.0-beta.29 development setup excludes
+`frappe-ui` from dependency prebundling. This installed package ships unbuilt
+TextEditor source with virtual `~icons/lucide/*` imports. Its native Vite plugin
+resolves them when serving source, while the esbuild dependency optimizer cannot
+bundle them. The exclusion also covers package subpaths and keeps the existing
+native plugin, dependency includes and single-runtime deduplication in place.
+CommonJS dependencies still require optimization; `feather-icons` is already
+included. Add another explicit include only for a demonstrated raw CommonJS
+failure. This configuration affects development, not production bundling.
+
+See the [installed Frappe UI plugin](https://github.com/frappe/frappe-ui/blob/v1.0.0-beta.29/vite/index.js)
+and [Vite 5 optimizer contract](https://github.com/vitejs/vite/blob/v5.4.21/docs/config/dep-optimization-options.md).
+Recheck the exclusion when upgrading those versions: newer Frappe UI source has
+changed its icon and optimizer defaults. Native startup and real-page
+development proof must verify this workaround; production success alone is
+insufficient evidence.
+
 Run in the isolated CRM worktree with the existing container/dependencies:
 
 ```sh
