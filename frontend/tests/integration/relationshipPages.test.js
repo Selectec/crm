@@ -13,6 +13,7 @@ import Activities from '@/components/Activities/Activities.vue'
 import NoteArea from '@/components/Activities/NoteArea.vue'
 import DoctypeModals from '@/components/Modals/DoctypeModals.vue'
 import { useDoctypeModal } from '@/composables/doctypeModal'
+import { useAttachments } from '@/composables/useAttachments'
 import { setupCustomizations } from '@/utils'
 import { useRecordPagePanels } from '@/composables/useRecordPagePanels'
 import RecordPagePanels from '@/components/RecordPagePanels.vue'
@@ -23,23 +24,26 @@ window.sysdefaults = { ...window.sysdefaults, date_format: 'yyyy-mm-dd', time_fo
 const fixture = vi.hoisted(() => ({ enabled: true, script: null, contributions: null, rendererFactory: null, discovery: null, loadFailure: null, rendererLoad: null, documents: new Map(), requests: [], requestOptions: [] }))
 vi.mock('@/data/document', async () => {
   const { reactive } = await import('vue')
-  return { useDocument(doctype, name) {
+  const actual = await vi.importActual('@/data/document')
+  return { useDocument(doctype, name, overrides, editorDocument) {
+    if (fixture.nativeControllers) return actual.useDocument(...arguments)
     const key = `${doctype}:${name || ''}`
     if (!fixture.documents.has(key)) fixture.documents.set(key, reactive({
       doc: name ? { doctype, name, organization_name: name, full_name: name } : {},
       setValue: { submit() {} }, save: { submit() {} }, actions: [], fieldPropertyOverrides: {},
     }))
+    const resource = editorDocument || fixture.documents.get(key)
     return {
-      document: fixture.documents.get(key),
+      document: resource,
       permissions: { data: { permissions: { delete: false } } },
       scripts: { data: fixture.script ? [{script:fixture.script}] : [] },
-      triggerOnRender: async () => { fixture.renderDocument?.(fixture.documents.get(key).doc) }, triggerOnBeforeCreate: async () => {},
+      triggerOnRender: async () => { fixture.renderDocument?.(resource.doc) }, triggerOnBeforeCreate: async () => {},
       triggerOnValidate: async () => { fixture.clientEvents?.push('validate') },
       triggerOnSave: async () => { fixture.clientEvents?.push('save') },
       triggerOnError: async () => { fixture.clientEvents?.push('error') },
       triggerOnChange: async (fieldname, value, row) => {
         fixture.clientEvents?.push(`change:${fieldname}`)
-        ;(row || fixture.documents.get(key).doc)[fieldname] = value
+        ;(row || resource.doc)[fieldname] = value
       },
     }
   } }
@@ -48,12 +52,24 @@ vi.mock('frappe-ui', async (original) => {
   const actual = await original()
   const { reactive } = await import('vue')
   return { ...actual, call: async (method, context) => {
+    if (method === 'test.editor.pause') return fixture.controllerPause
     if (method === 'crm.api.record_page.get_panels') {
       if (fixture.discovery) return fixture.discovery(context)
       return {context, contributions: fixture.contributions || (fixture.enabled ? [{key:'demo:activity',id:'activity',owner_app:'demo',renderer:'activity',version:1,js:{url:'/assets/demo/demo.bundle.js',revision:'one'},css:[],default_panel:'Activity',panels:[{id:'Activity',name:'demo:activity:Activity',label:'Activity'},{id:'Notes',name:'demo:activity:Notes',label:'Notes'}]}] : []),diagnostics:[]}
     }
     return actual.call(method,context)
-  }, usePageMeta() {}, createListResource() { return reactive({data: []}) },
+  }, usePageMeta() {}, createListResource(options) {
+    const data = options?.doctype === 'CRM Form Script' && fixture.controllerScript
+      ? [{name:'Native editor controller',script:fixture.controllerScript}] : []
+    options?.onSuccess?.(data)
+    return reactive({data,list:{promise:Promise.resolve()},fetch:async()=>data})
+  }, createDocumentResource(options) {
+    const key = `${options.doctype}:${options.name}`
+    const resource = fixture.documents.get(key)
+    resource.reload = async () => { await options.onSuccess?.(resource.doc); return resource.doc }
+    Promise.resolve().then(()=>resource.reload())
+    return resource
+  },
     createResource(options) {
       fixture.requests.push(options.url)
       fixture.requestOptions.push(options)
@@ -90,7 +106,8 @@ vi.mock('@/stores/global', () => ({ globalStore: () => ({$socket:{on(){},off(){}
 vi.mock('@/stores/users', () => ({ usersStore: () => ({isManager:()=>false,getUser:()=>({full_name:'Staff'})}) }))
 vi.mock('@/stores/statuses', () => ({ statusesStore: () => ({getDealStatus:()=>({})}) }))
 vi.mock('@/stores/organizations', () => ({ organizationsStore: () => ({getOrganization:()=>({})}) }))
-vi.mock('@/stores/meta', () => ({ getMeta: () => ({doctypeMeta: {value:{}},getFields:()=>[],getField:()=>({}),getMeta:()=>({})}) }))
+vi.mock('@/stores/meta', () => ({ getMeta: () => ({doctypesMeta:{'FCRM Note':{fields:[]}},doctypeMeta: {value:{}},getFields:()=>[],getField:()=>({}),getMeta:()=>({})}) }))
+vi.mock('@/router', () => ({default:{push(){}}}))
 vi.mock('@/utils/view', () => ({ getView: () => null }))
 vi.mock('@/composables/whatsapp', async () => ({whatsappEnabled:(await import('vue')).ref(false)}))
 vi.mock('@/composables/telephony', () => ({callEnabled:{value:false}}))
@@ -106,7 +123,7 @@ vi.mock('@/components/DeleteLinkedDocModal.vue', () => ({default:{render:()=>nul
 
 let app, element
 async function settle() { for(let i=0;i<8;i++) { await nextTick(); await new Promise(resolve=>setTimeout(resolve,0)) } }
-afterEach(()=>{app?.unmount();element?.remove();document.body.innerHTML='';fixture.documents.clear();fixture.script=null;fixture.contributions=null;fixture.rendererFactory=null;fixture.discovery=null;fixture.loadFailure=null;fixture.rendererLoad=null;fixture.enabled=true;useDoctypeModal().show.value=false})
+afterEach(()=>{app?.unmount();element?.remove();document.body.innerHTML='';fixture.documents.clear();fixture.script=null;fixture.contributions=null;fixture.rendererFactory=null;fixture.discovery=null;fixture.loadFailure=null;fixture.rendererLoad=null;fixture.nativeControllers=false;fixture.controllerScript=null;fixture.controllerPause=null;fixture.enabled=true;useDoctypeModal().show.value=false})
 async function open(Page, props) {
   const router=createRouter({history:createMemoryHistory(),routes:[{path:'/',name:'Test',component:{render:()=>null}},{path:'/organizations',name:'Organizations',component:{render:()=>null}},{path:'/contacts',name:'Contacts',component:{render:()=>null}},{path:'/organizations/:organizationId',name:'Organization',component:{render:()=>null}},{path:'/contacts/:contactId',name:'Contact',component:{render:()=>null}}]})
   await router.push('/');await router.isReady()
@@ -119,6 +136,134 @@ async function open(Page, props) {
 }
 
 describe('existing native relationship pages',()=>{
+  it('shows an asynchronous native save-hook error without losing the accepted document or leaving an unhandled rejection', async () => {
+    fixture.nativeControllers = true
+    fixture.nativeSaves = []
+    fixture.controllerScript = `class FCRMNote { async onSave() { throw new Error('Native save hook failed') } }`
+    const loaded = {doctype:'FCRM Note',name:'Save hook error Note',title:'Accepted source',modified:'2026-10-02 12:00:00.000001'}
+    fixture.documents.set('FCRM Note:Save hook error Note',reactive({doc:loaded,save:{submit:vi.fn()},actions:[],fieldPropertyOverrides:{}}))
+    fixture.saveResult = {...loaded,modified:'2026-10-02 12:01:00.000001'}
+    const callback = vi.fn()
+    await open({render:()=>null},{})
+    useDoctypeModal().showModal({doctype:'FCRM Note',name:loaded.name,title:'Note',fullDocumentSave:true,callbacks:{afterUpdate:callback}})
+    await settle()
+    ;[...document.body.querySelectorAll('button')].find(button=>button.textContent==='Update').click()
+    await settle()
+    expect(document.body.textContent).toContain('Native save hook failed')
+    expect(useDoctypeModal().show.value).toBe(true)
+    expect(callback).toHaveBeenCalledWith(fixture.saveResult)
+    expect(fixture.documents.get('FCRM Note:Save hook error Note').doc.modified).toBe(fixture.saveResult.modified)
+    fixture.saveResult = null
+  })
+  it('does not close a later editor when an earlier native save hook completes after its modal was closed', async () => {
+    let resume
+    fixture.controllerPause = new Promise(resolve=>{resume=resolve})
+    fixture.nativeControllers = true
+    fixture.nativeSaves = []
+    fixture.controllerScript = `class FCRMNote {
+      async onSave() { await this.call('test.editor.pause'); this.doc.content = '<p>Old editor hook draft</p>' }
+    }`
+    const first = {doctype:'FCRM Note',name:'Closed async save Note',title:'First editor',content:'<p>Original</p>',modified:'2026-10-02 12:00:00.000001'}
+    const resource = reactive({doc:first,save:{submit:vi.fn()},actions:[],fieldPropertyOverrides:{}})
+    fixture.documents.set('FCRM Note:Closed async save Note',resource)
+    fixture.saveResult = {...first,modified:'2026-10-02 12:01:00.000001'}
+    await open({render:()=>null},{})
+    useDoctypeModal().showModal({doctype:'FCRM Note',name:first.name,title:'Note',fullDocumentSave:true})
+    await settle()
+    ;[...document.body.querySelectorAll('button')].find(button=>button.textContent==='Update').click()
+    await settle()
+    useDoctypeModal().show.value = false
+    await settle()
+    const second = {...first,name:'Next independent Note',title:'Next editor'}
+    fixture.documents.set('FCRM Note:Next independent Note',reactive({doc:second,save:{submit:vi.fn()},actions:[],fieldPropertyOverrides:{}}))
+    const nextCallback = vi.fn()
+    useDoctypeModal().showModal({doctype:'FCRM Note',name:second.name,title:'Note',callbacks:{afterUpdate:nextCallback}})
+    await settle()
+    resume()
+    await settle()
+    expect(useDoctypeModal().show.value).toBe(true)
+    expect(document.body.querySelector('input[placeholder="Title"]').value).toBe('Next editor')
+    expect(nextCallback).not.toHaveBeenCalled()
+    expect(resource.doc.content).toBe('<p>Original</p>')
+    fixture.saveResult = null
+  })
+  it('processes native pending attachment deletions only after an accepted full-document save', async () => {
+    fixture.nativeSaves = []
+    const loaded = {doctype:'FCRM Note',name:'Attachment cleanup Note',title:'Attachment owner',modified:'2026-10-02 12:00:00.000001'}
+    fixture.documents.set('FCRM Note:Attachment cleanup Note',reactive({doc:loaded,save:{submit:vi.fn()},actions:[],fieldPropertyOverrides:{}}))
+    const attachments = useAttachments('FCRM Note',loaded.name)
+    attachments.trackOldFile('/files/old-editor-attachment.txt','/files/replacement-editor-attachment.txt')
+    fixture.saveResult = null
+    await open({render:()=>null},{})
+    useDoctypeModal().showModal({doctype:'FCRM Note',name:loaded.name,title:'Note',fullDocumentSave:true})
+    await settle()
+    const start = fixture.requestOptions.length
+    ;[...document.body.querySelectorAll('button')].find(button=>button.textContent==='Update').click()
+    await settle()
+    expect(fixture.requestOptions.slice(start).filter(options=>options.url==='crm.api.delete_attachment')).toHaveLength(0)
+    fixture.saveResult = {...loaded,modified:'2026-10-02 12:01:00.000001'}
+    ;[...document.body.querySelectorAll('button')].find(button=>button.textContent==='Update').click()
+    await settle()
+    expect(fixture.requestOptions.slice(start).filter(options=>options.url==='crm.api.delete_attachment').map(options=>options.params)).toEqual([
+      {doctype:'FCRM Note',docname:loaded.name,file_url:'/files/old-editor-attachment.txt'},
+    ])
+    fixture.saveResult = null
+  })
+  it('honors native controller modal opt-in from a global launcher while keeping other documents on stock save', async () => {
+    fixture.nativeControllers = true
+    fixture.nativeSaves = []
+    fixture.controllerScript = `class FCRMNote {
+      get modalOptions() { return {fullDocumentSave:this.doc.custom_use_revision === 1} }
+    }`
+    const managed = {doctype:'FCRM Note',name:'Controller Managed Note',title:'Managed source',modified:'2026-10-02 12:00:00.000001',custom_use_revision:1}
+    fixture.documents.set('FCRM Note:Controller Managed Note',reactive({doc:managed,save:{submit:vi.fn()},actions:[],fieldPropertyOverrides:{}}))
+    await open({render:()=>null},{})
+    useDoctypeModal().showModal({doctype:'FCRM Note',name:managed.name,title:'Note'})
+    await settle()
+    ;[...document.body.querySelectorAll('button')].find(button=>button.textContent==='Update').click()
+    await settle()
+    expect(fixture.nativeSaves[0]?.doc).toEqual(managed)
+    useDoctypeModal().show.value = false
+    await settle()
+    const stockSave = vi.fn()
+    const plain = {...managed,name:'Controller Plain Note',title:'Stock source',custom_use_revision:0}
+    fixture.documents.set('FCRM Note:Controller Plain Note',reactive({doc:plain,save:{submit:stockSave},actions:[],fieldPropertyOverrides:{}}))
+    useDoctypeModal().showModal({doctype:'FCRM Note',name:plain.name,title:'Note'})
+    await settle()
+    ;[...document.body.querySelectorAll('button')].find(button=>button.textContent==='Update').click()
+    await settle()
+    expect(stockSave).toHaveBeenCalledTimes(1)
+    expect(fixture.nativeSaves).toHaveLength(1)
+  })
+  it('keeps a paused native field controller bound to its editor when realtime replaces the shared document', async () => {
+    let resume
+    fixture.controllerPause = new Promise(resolve=>{resume=resolve})
+    fixture.nativeControllers = true
+    fixture.controllerScript = `class FCRMNote {
+      async title() {
+        await this.call('test.editor.pause');
+        this.doc.content = '<p>Controller draft: ' + this.doc.title + '</p>';
+      }
+    }`
+    const loaded = {doctype:'FCRM Note',name:'Async Controller Note',title:'Loaded title',content:'<p>Loaded content</p>',modified:'2026-10-02 12:00:00.000001'}
+    const resource = reactive({doc:loaded,save:{submit:vi.fn()},actions:[],fieldPropertyOverrides:{}})
+    fixture.documents.set('FCRM Note:Async Controller Note',resource)
+    await open({render:()=>null},{})
+    useDoctypeModal().showModal({doctype:'FCRM Note',name:loaded.name,title:'Note',fullDocumentSave:true})
+    await settle()
+    const title = document.body.querySelector('input[placeholder="Title"]')
+    title.value = 'Unsent title'
+    title.dispatchEvent(new Event('input',{bubbles:true}))
+    title.dispatchEvent(new Event('change',{bubbles:true}))
+    await nextTick()
+    const newer = {...loaded,title:'Newer server title',content:'<p>Newer server content</p>',modified:'2026-10-02 12:01:00.000001'}
+    resource.doc = newer
+    resume()
+    await settle()
+    expect(resource.doc.content).toBe('<p>Newer server content</p>')
+    expect(document.body.querySelector('input[placeholder="Title"]').value).toBe('Unsent title')
+    expect(document.body.querySelector('[contenteditable="true"]').textContent).toContain('Controller draft: Unsent title')
+  })
   it('shows an initial opt-in editor read failure without exposing fields or allowing insertion', async () => {
     fixture.documents.set('FCRM Note:Unavailable Note',reactive({doc:{},reload:async()=>{throw new Error('Read permission unavailable')},save:{submit:vi.fn()},actions:[],fieldPropertyOverrides:{}}))
     await open({render:()=>null},{})

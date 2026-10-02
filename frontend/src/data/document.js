@@ -10,11 +10,24 @@ import { ref, reactive, getCurrentInstance } from 'vue'
 
 const documentsCache = {}
 const controllersCache = {}
+const controllerSetupCache = {}
 const assigneesCache = {}
 const permissionsCache = {}
 
-export function useDocument(doctype, docname, resourceOverrides = {}) {
+export function useDocument(
+  doctype,
+  docname,
+  resourceOverrides = {},
+  editorDocument = null,
+) {
   if (typeof docname === 'number') docname = String(docname)
+  // An editor can own its working document and controllers while assignee and
+  // permission resources retain their native shared identity.
+  const documentStore = editorDocument
+    ? { [doctype]: { [docname || '']: editorDocument } }
+    : documentsCache
+  const controllerStore = editorDocument ? {} : controllersCache
+  const controllerSetupStore = editorDocument ? {} : controllerSetupCache
   const { setupScript, scripts } = getScript(doctype)
   const meta = getMeta(doctype)
   const { trackOldFile, processPendingDeletions } = useAttachments(
@@ -23,13 +36,13 @@ export function useDocument(doctype, docname, resourceOverrides = {}) {
   )
 
   const vm = getCurrentInstance()?.proxy
-  documentsCache[doctype] = documentsCache[doctype] || {}
+  documentStore[doctype] = documentStore[doctype] || {}
 
   const error = ref('')
 
-  if (!documentsCache[doctype][docname || '']) {
+  if (!documentStore[doctype][docname || '']) {
     if (docname) {
-      documentsCache[doctype][docname] = createDocumentResource(
+      documentStore[doctype][docname] = createDocumentResource(
         {
           realtime: Boolean(vm?.$socket),
           doctype: doctype,
@@ -84,16 +97,16 @@ export function useDocument(doctype, docname, resourceOverrides = {}) {
         },
         vm,
       )
-      if (!documentsCache[doctype][docname].fieldHtmlMap) {
-        documentsCache[doctype][docname].fieldHtmlMap = {}
+      if (!documentStore[doctype][docname].fieldHtmlMap) {
+        documentStore[doctype][docname].fieldHtmlMap = {}
       }
-      if (!documentsCache[doctype][docname].fieldPropertyOverrides) {
-        documentsCache[doctype][docname].fieldPropertyOverrides = {}
+      if (!documentStore[doctype][docname].fieldPropertyOverrides) {
+        documentStore[doctype][docname].fieldPropertyOverrides = {}
       }
 
       // Override the submit function to trigger validation before submitting
       // TODO: fix validate function to return error message instead of throwing error in frappe-ui and remove try-catch block here
-      const _save = documentsCache[doctype][docname].save
+      const _save = documentStore[doctype][docname].save
       const _originalSubmit = _save.submit
       _save.submit = async function (...args) {
         try {
@@ -102,12 +115,12 @@ export function useDocument(doctype, docname, resourceOverrides = {}) {
           console.error(err)
           return
         }
-        const mandatory = checkMandatory(documentsCache[doctype][docname].doc)
+        const mandatory = checkMandatory(documentStore[doctype][docname].doc)
         if (mandatory) return
         return _originalSubmit.apply(_save, args)
       }
     } else {
-      documentsCache[doctype][''] = reactive({
+      documentStore[doctype][''] = reactive({
         doc: { __newDocument: true, doctype },
         fieldPropertyOverrides: {},
       })
@@ -146,18 +159,33 @@ export function useDocument(doctype, docname, resourceOverrides = {}) {
   }
 
   async function setupFormScript() {
+    controllerSetupStore[doctype] = controllerSetupStore[doctype] || {}
+    const key = docname || ''
+    if (controllerSetupStore[doctype][key]) {
+      return controllerSetupStore[doctype][key]
+    }
+    const pending = setupFormControllers()
+    controllerSetupStore[doctype][key] = pending
+    try {
+      return await pending
+    } finally {
+      delete controllerSetupStore[doctype][key]
+    }
+  }
+
+  async function setupFormControllers() {
     if (
-      controllersCache[doctype] &&
-      typeof controllersCache[doctype][docname || ''] === 'object'
+      controllerStore[doctype] &&
+      typeof controllerStore[doctype][docname || ''] === 'object'
     ) {
       return
     }
 
-    if (!controllersCache[doctype]) {
-      controllersCache[doctype] = {}
+    if (!controllerStore[doctype]) {
+      controllerStore[doctype] = {}
     }
 
-    controllersCache[doctype][docname || ''] = {}
+    controllerStore[doctype][docname || ''] = {}
 
     const { makeCall } = globalStore()
 
@@ -172,7 +200,7 @@ export function useDocument(doctype, docname, resourceOverrides = {}) {
     }
 
     const controllersArray = await setupScript(
-      documentsCache[doctype][docname || ''],
+      documentStore[doctype][docname || ''],
       helpers,
     )
 
@@ -186,7 +214,7 @@ export function useDocument(doctype, docname, resourceOverrides = {}) {
       }
       organizedControllers[controllerKey].push(controller)
     }
-    controllersCache[doctype][docname || ''] = organizedControllers
+    controllerStore[doctype][docname || ''] = organizedControllers
 
     triggerOnLoad()
     triggerOnRender()
@@ -196,7 +224,7 @@ export function useDocument(doctype, docname, resourceOverrides = {}) {
     const _doctype = row?.doctype || doctype
     const controllerKey = _doctype.replace(/\s+/g, '')
 
-    const docControllers = controllersCache[doctype]?.[docname || '']
+    const docControllers = controllerStore[doctype]?.[docname || '']
 
     if (
       typeof docControllers === 'object' &&
@@ -214,7 +242,7 @@ export function useDocument(doctype, docname, resourceOverrides = {}) {
     if (!fields || fields.length === 0) return
 
     const overrides =
-      documentsCache[doctype][docname || '']?.fieldPropertyOverrides || {}
+      documentStore[doctype][docname || '']?.fieldPropertyOverrides || {}
 
     const missingFields = findMissingMandatory(fields, doc, {
       propertyOverrides: overrides,
@@ -279,8 +307,8 @@ export function useDocument(doctype, docname, resourceOverrides = {}) {
       oldValue = row[fieldname]
       row[fieldname] = value
     } else {
-      oldValue = documentsCache[doctype][docname || ''].doc[fieldname]
-      documentsCache[doctype][docname || ''].doc[fieldname] = value
+      oldValue = documentStore[doctype][docname || ''].doc[fieldname]
+      documentStore[doctype][docname || ''].doc[fieldname] = value
       trackOldFile(oldValue, value)
     }
 
@@ -356,7 +384,7 @@ export function useDocument(doctype, docname, resourceOverrides = {}) {
   }
 
   function setFieldHtml(fieldname, html) {
-    const cache = documentsCache[doctype][docname || '']
+    const cache = documentStore[doctype][docname || '']
     if (!cache.fieldHtmlMap) cache.fieldHtmlMap = {}
     cache.fieldHtmlMap[fieldname] = html
   }
@@ -373,7 +401,7 @@ export function useDocument(doctype, docname, resourceOverrides = {}) {
   }
 
   return {
-    document: documentsCache[doctype][docname || ''],
+    document: documentStore[doctype][docname || ''],
     assignees: assigneesCache[doctype][docname || ''],
     permissions: permissionsCache[doctype][docname || ''],
     scripts,
