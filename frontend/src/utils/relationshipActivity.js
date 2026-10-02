@@ -16,7 +16,7 @@ export function collectRelationshipActivity(customizations) {
     !methods.length ||
     methods.some((method) => !method || typeof method.name !== 'string' || !method.name || typeof method.label !== 'string') ||
     new Set(methods.map((method) => method.name)).size !== methods.length ||
-    methods.some((method) => ['Deals', 'Contacts'].includes(method.name)) ||
+    methods.some((method) => ['Details', 'Deals', 'Contacts'].includes(method.name)) ||
     !methods.some((method) => method.name === contribution.initialTab)
   ) {
     throw new Error('Invalid relationship activity contribution.')

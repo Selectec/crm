@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createApp, h, reactive, nextTick } from 'vue'
 import { createRouter, createMemoryHistory } from 'vue-router'
-import { Button, Dialog, ErrorMessage, Badge, FormControl, TextInput } from 'frappe-ui'
+import { Button, Dialog, ErrorMessage, Badge, FormControl, TextInput, FeatherIcon } from 'frappe-ui'
 import Organization from '@/pages/Organization.vue'
 import Contact from '@/pages/Contact.vue'
 import MobileOrganization from '@/pages/MobileOrganization.vue'
@@ -18,7 +18,7 @@ import { setupCustomizations } from '@/utils'
 // External boot data used by genuine native date/timestamp controls.
 window.sysdefaults = { ...window.sysdefaults, date_format: 'yyyy-mm-dd', time_format: 'HH:mm:ss' }
 
-const fixture = vi.hoisted(() => ({ enabled: true, documents: new Map(), requests: [], requestOptions: [] }))
+const fixture = vi.hoisted(() => ({ enabled: true, script: null, documents: new Map(), requests: [], requestOptions: [] }))
 vi.mock('@/data/document', async () => {
   const { reactive } = await import('vue')
   return { useDocument(doctype, name) {
@@ -30,7 +30,7 @@ vi.mock('@/data/document', async () => {
     return {
       document: fixture.documents.get(key),
       permissions: { data: { permissions: { delete: false } } },
-      scripts: { data: fixture.enabled && ['CRM Organization', 'Contact'].includes(doctype) ? [{ script: `
+      scripts: { data: fixture.enabled && ['CRM Organization', 'Contact'].includes(doctype) ? [{ script: fixture.script || `
         function setupForm({relationshipUI}) {
           const {h, showModal} = relationshipUI;
           return {relationshipActivity: {version:1, initialTab:'Activity',
@@ -81,12 +81,11 @@ vi.mock('@/components/LayoutHeader.vue', () => ({default:{render(){return h('hea
 vi.mock('@/components/ListViews/DealsListView.vue', () => ({default:{render:()=>null}}))
 vi.mock('@/components/ListViews/ContactsListView.vue', () => ({default:{render:()=>null}}))
 vi.mock('@/components/DeleteLinkedDocModal.vue', () => ({default:{render:()=>null}}))
-vi.mock('@/components/CustomActions.vue', () => ({default:{render:()=>null}}))
 
 
 let app, element
 async function settle() { for(let i=0;i<8;i++) { await nextTick(); await new Promise(resolve=>setTimeout(resolve,0)) } }
-afterEach(()=>{app?.unmount();element?.remove();document.body.innerHTML='';fixture.documents.clear();useDoctypeModal().show.value=false})
+afterEach(()=>{app?.unmount();element?.remove();document.body.innerHTML='';fixture.documents.clear();fixture.script=null;fixture.enabled=true;useDoctypeModal().show.value=false})
 async function open(Page, props) {
   const router=createRouter({history:createMemoryHistory(),routes:[{path:'/',name:'Test',component:{render:()=>null}},{path:'/organizations',name:'Organizations',component:{render:()=>null}},{path:'/contacts',name:'Contacts',component:{render:()=>null}},{path:'/organizations/:organizationId',name:'Organization',component:{render:()=>null}},{path:'/contacts/:contactId',name:'Contact',component:{render:()=>null}}]})
   await router.push('/');await router.isReady()
@@ -94,7 +93,7 @@ async function open(Page, props) {
   app=createApp({render:()=>h('div',[h(Page,props),h(DoctypeModals)])})
   app.use(router)
   app.use(translationPlugin)
-  for(const [name, component] of Object.entries({Button,Dialog,ErrorMessage,Badge,FormControl,TextInput,EmptyState,DeleteLinkedDocModal})) app.component(name,component)
+  for(const [name, component] of Object.entries({Button,Dialog,ErrorMessage,Badge,FormControl,TextInput,FeatherIcon,EmptyState,DeleteLinkedDocModal})) app.component(name,component)
   app.mount(element);await settle()
 }
 
@@ -131,6 +130,41 @@ describe('existing native relationship pages',()=>{
       expect(element.textContent).toContain('Record information')
     }
   })
+  it('rejects a contributed Details method and retains native mobile record information', async () => {
+    fixture.script = `function setupForm({relationshipUI}) {
+      return {relationshipActivity:{version:1,initialTab:'Activity',
+        tabs:[{name:'Activity',label:'Activity'},{name:'Details',label:'Details'}],
+        component:{render:()=>relationshipUI.h('div','Contributed replacement')}}};
+    }`
+    await open(MobileOrganization,{organizationId:'Same Name'})
+    expect(element.textContent).toContain('Invalid relationship activity contribution')
+    expect([...element.querySelectorAll('[role="tab"]')].map(tab=>tab.textContent.trim().replace(/\s*\d+$/, ''))).toEqual(['Details','Deals','Contacts'])
+    expect(element.textContent).toContain('Record information')
+    expect(element.textContent).not.toContain('Contributed replacement')
+  })
+  it('keeps an unsent composer draft while refreshing document props and native header actions', async () => {
+    fixture.script = `function setupForm({doc,relationshipUI}) {
+      const {h,ref} = relationshipUI;
+      return {actions:[{label:'Action: '+doc.full_name,onClick(){}}],
+        relationshipActivity:{version:1,initialTab:'Notes',tabs:[{name:'Notes',label:'Notes'}],
+          component:{props:['doc'],setup(props){
+            const draft=ref('');
+            return ()=>h('div',[h('span','Current record: '+props.doc.full_name),
+              h('textarea',{'aria-label':'Unsent note draft',value:draft.value,onInput:event=>draft.value=event.target.value})]);
+          }}}};
+    }`
+    await open(Contact,{contactId:'Same Name'})
+    const composer=element.querySelector('textarea[aria-label="Unsent note draft"]')
+    composer.value='My unsent note'
+    composer.dispatchEvent(new Event('input',{bubbles:true}))
+    await settle()
+    fixture.documents.get('Contact:Same Name').doc={doctype:'Contact',name:'Same Name',full_name:'After reload'}
+    await settle()
+    expect(element.textContent).toContain('Current record: After reload')
+    expect([...element.querySelectorAll('button')].some(button=>button.textContent==='Action: After reload')).toBe(true)
+    expect(element.querySelector('textarea[aria-label="Unsent note draft"]').value).toBe('My unsent note')
+    expect(element.querySelector('textarea[aria-label="Unsent note draft"]')).toBe(composer)
+  })
   it('keeps the existing tab layout when no activity contribution is installed',async()=>{
     fixture.enabled=false;await open(Organization,{organizationId:'Unmanaged'})
     expect([...element.querySelectorAll('[role="tab"]')].map(tab=>tab.textContent.trim().replace(/\s*\d+$/, ''))).toEqual(['Deals','Contacts'])
@@ -140,6 +174,23 @@ describe('existing native relationship pages',()=>{
 
 // Native rendering remains unchanged; the application owns authorised typed reads.
 describe('native relationship activity resource', () => {
+  it('updates both slot contexts when a mounted adapter replaces its document after reload', async () => {
+    const adapter=reactive({
+      doc:{name:'Same Name',full_name:'Before reload'},
+      resource:{data:{versions:[],calls:[],notes:[],tasks:[],attachments:[]},loading:false,reload:vi.fn()},
+      actions:{},
+    })
+    await open({render:()=>h(Activities,{doctype:'Contact',docname:'Same Name',tabs:[{name:'Activity'}],adapter},{
+      header:({doc})=>h('div',`Header: ${doc.full_name}`),
+      composer:({doc})=>h('div',`Composer: ${doc.full_name}`),
+    })},{})
+    expect(element.textContent).toContain('Header: Before reload')
+    adapter.doc={name:'Same Name',full_name:'After reload'}
+    await settle()
+    expect(element.textContent).toContain('Header: After reload')
+    expect(element.textContent).toContain('Composer: After reload')
+    expect(element.textContent).not.toContain('Before reload')
+  })
   it('renders native versions separately from Notes and Tasks and loads older entries', async () => {
     const loadMore = vi.fn()
     const resource = reactive({

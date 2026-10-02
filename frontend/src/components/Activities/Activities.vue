@@ -534,7 +534,12 @@ const reload = defineModel('reload', { type: Boolean, default: false })
 const tabIndex = defineModel('tabIndex', { type: Number, default: 0 })
 
 const _document = props.adapter
-  ? { doc: props.adapter.doc, reload: () => props.adapter.reloadDoc?.() }
+  ? {
+      get doc() {
+        return props.adapter.doc
+      },
+      reload: () => props.adapter.reloadDoc?.(),
+    }
   : useDocument(props.doctype, props.docname).document
 
 const doc = computed(() => _document.doc || {})

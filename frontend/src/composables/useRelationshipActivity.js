@@ -17,6 +17,7 @@ export function useRelationshipActivity({ record, scripts, nativeTabs, context }
   }
 
   let generation = 0
+  let componentOwner = ''
   watch(
     [() => record.doc, () => scripts.data],
     async ([doc, registrations]) => {
@@ -31,9 +32,22 @@ export function useRelationshipActivity({ record, scripts, nativeTabs, context }
         if (current !== generation) return
         record._actions = customization.actions || []
         const initial = !activity.value
-        activity.value = customization.relationshipActivity
-          ? markRaw(customization.relationshipActivity)
+        const owner = JSON.stringify([
+          doc.doctype,
+          doc.name,
+          registrations.map(({ name, script }) => [name, script]),
+        ])
+        const contribution = customization.relationshipActivity
+        // Refresh descriptors/actions, retaining drafts while their owner is unchanged.
+        activity.value = contribution
+          ? markRaw({
+              ...contribution,
+              component: activity.value && componentOwner === owner
+                ? activity.value.component
+                : contribution.component,
+            })
           : null
+        componentOwner = contribution ? owner : ''
         error.value = customization.relationshipActivityError || ''
         if (initial && activity.value) changeTab(activity.value.initialTab)
       } catch (failure) {

@@ -43,6 +43,16 @@ methods and a public `changeTab(name)` function. No outer activity tab is added.
 No contribution retains the native record layout. Conflicting contributions or
 malformed descriptors produce an explicit error; independent existing header
 actions and status options remain available. One activity area has one owner.
+`Details`, `Deals` and `Contacts` are reserved native tab names; contributions
+cannot shadow the existing information or related-record panes.
+
+On a record reload, CRM refreshes the descriptor and header actions while keeping
+the contributed component mounted for the same typed record and ordered Form
+Script names/sources. Unsent composer state and component-owned resources survive
+that reload. The component must read the current record through `props.doc`;
+`setupForm`'s `doc` argument is a snapshot for that invocation. Changing the record
+identity or registered script sources replaces the component; removing or
+invalidating the contribution unmounts it.
 
 `relationshipUI` version 1 uses CRM's Vue instance and provides `h`, `ref`,
 `computed`, `watch`, `onMounted`, `onUnmounted`, `createResource`, `call`, `toast`,
@@ -83,6 +93,7 @@ The resource supplies native presentation data:
 In adapter mode the native header/composer defaults and sales modal collection
 are suppressed. Use the `header` and `composer` slots, each receiving
 `{ doc, method, resource }`, for implemented application controls/composers.
+The slot document follows `adapter.doc` replacements after a reload.
 No placeholder methods are installed. For lists rendered inside Activities,
 `actions` provides the corresponding native action facade, for example
 `showNote(note)` or task operations; standalone native cards can be composed by
@@ -151,6 +162,10 @@ contribution unit check also passed. A shared composable owns registration for
 all four hosts. Subsequent component checks cover the native typed resource,
 failure/retry, distinct Activity versus Notes/Tasks, older-entry loading, full
 read-only rich note/default reset, deletion capability and independent
-Lead/Deal Form Script actions/statuses. These use fake backend transport and are
+Lead/Deal Form Script actions/statuses. Peer-review regressions also cover live
+slot documents, rejected mobile information-tab collisions, and composer drafts
+surviving same-record reloads while native header actions refresh. All 17
+relationship component checks and 130 unit checks passed in the coordinator
+container after those fixes. These use fake backend transport and are
 bounded component evidence, not native persistence/permission or full feature
 acceptance. The maintained application must complete its real-site journeys.
