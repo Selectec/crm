@@ -1,4 +1,4 @@
-import { computed, markRaw, onUnmounted, reactive, ref, watch } from 'vue'
+import { computed, markRaw, onUnmounted, reactive, ref, useId, watch } from 'vue'
 import { setupCustomizations } from '@/utils'
 import { useRecordPanelRuntime } from '@/components/Activities/recordPanelRuntime'
 import { getPanelRegistry } from '@/utils/recordPanelRegistry'
@@ -10,6 +10,8 @@ export function useRecordPagePanels({ record, scripts, nativeTabs, context }) {
   const diagnostics = ref([])
   const loading = ref(false)
   const tabIndex = ref(0)
+  const hostId = useId()
+  const triggerId = name => `crm-panel-trigger-${hostId}-${encodeURIComponent(name)}`
   const ui = useRecordPanelRuntime(context.router)
   const runtime = Object.freeze(ui)
   const registry = getPanelRegistry()
@@ -21,11 +23,15 @@ export function useRecordPagePanels({ record, scripts, nativeTabs, context }) {
     const index = tabs.value.findIndex(panel => panel.name === name)
     if (index >= 0) tabIndex.value = index
   }
+  function panelTabAttributes(tab) {
+    const group = groups.value.find(group => group.descriptor.panels.some(panel => panel.name === tab.name))
+    return group ? { id: triggerId(tab.name), 'aria-controls': group.panelId } : {}
+  }
   function updateContexts() {
     for (const group of groups.value) {
       const panel = group.descriptor.panels.find(panel => panel.name === selected.value)
       group.context.active = Boolean(panel)
-      if (panel) group.context.panel = panel.id
+      if (panel) { group.context.panel = panel.id; group.labelledBy = triggerId(panel.name) }
       group.context.doc = record.doc
     }
   }
@@ -35,8 +41,14 @@ export function useRecordPagePanels({ record, scripts, nativeTabs, context }) {
   let disposed = false
   onUnmounted(() => { disposed = true; generation++ })
   async function discover(doc = record.doc) {
-    if (!doc?.doctype || !doc?.name) return
     const current = ++generation
+    if (!doc?.doctype || !doc?.name) {
+      groups.value = []
+      typedOwner = ''
+      loading.value = false
+      diagnostics.value = []
+      return
+    }
     const typed = JSON.stringify([doc.doctype, doc.name])
     const changed = typed !== typedOwner
     const previousSelection = selected.value
@@ -55,7 +67,7 @@ export function useRecordPagePanels({ record, scripts, nativeTabs, context }) {
         if (existing) { existing.descriptor = descriptor; existing.context.panels = descriptor.panels; return existing }
         const live = reactive({ doctype: doc.doctype, name: doc.name, doc, panel: descriptor.default_panel || descriptor.panels[0].id, panels: descriptor.panels, active: false,
           selectPanel: local => selectPanel(`${descriptor.key}:${local}`), refreshRecord: () => record.reload?.() })
-        return reactive({ owner, descriptor, context: live, component: null, error: '', loading: true })
+        return reactive({ owner, descriptor, context: live, panelId: `crm-panel-content-${hostId}-${encodeURIComponent(descriptor.key)}`, labelledBy: triggerId(`${descriptor.key}:${live.panel}`), component: null, error: '', loading: true })
       })
       const defaults = groups.value.find(group => group.descriptor.default_panel)
       const fallback = nativeTabs[0]?.name
@@ -90,5 +102,5 @@ export function useRecordPagePanels({ record, scripts, nativeTabs, context }) {
     const customization = await setupCustomizations(registrations, { ...context, doc })
     if (!disposed && current === scriptGeneration) record._actions = customization.actions || []
   }, { immediate: true })
-  return { groups, error, diagnostics, loading, tabs, tabIndex, panelSelected, isPanelTab, selectPanel, retry: () => discover() }
+  return { groups, error, diagnostics, loading, tabs, tabIndex, panelSelected, isPanelTab, panelTabAttributes, selectPanel, retry: () => discover() }
 }

@@ -128,6 +128,7 @@
     >
       <template #tab-item="{ tab, selected }">
         <button
+          v-bind="panelTabAttributes(tab)"
           class="group flex items-center gap-2 border-b border-transparent py-2.5 text-base text-ink-gray-5 duration-300 ease-in-out hover:text-ink-gray-9"
           :class="{ 'text-ink-gray-9': selected }"
         >
@@ -327,6 +328,7 @@ const {
   tabs,
   tabIndex,
   panelSelected,
+  panelTabAttributes,
   retry: retryPanels,
 } = useRecordPagePanels({
   record: contact,

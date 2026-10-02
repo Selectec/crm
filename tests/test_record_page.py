@@ -83,6 +83,7 @@ class TestDiscovery(unittest.TestCase):
 			dict(declaration("demo"), version=True),
 			dict(declaration("demo"), targets=[{}]),
 			dict(declaration("demo"), id="native:Details"),
+			dict(declaration("demo"), default_panel={}),
 		):
 			with (
 				self.subTest(malformed=malformed),

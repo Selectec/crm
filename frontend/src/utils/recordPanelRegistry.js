@@ -4,6 +4,7 @@ export function createPanelRegistry(browser = window) {
   const factories = new Map()
   const loads = new Map()
   const registrationErrors = new Map()
+  const assetDeclarations = new Map()
   const assetKey = (asset) => JSON.stringify([asset.url, asset.revision])
   const rendererKey = (item) => JSON.stringify([item.owner_app, item.renderer, item.version, assetKey(item.js)])
   const fail = (message) => { throw new Error(`Record-page renderer: ${message}`) }
@@ -15,7 +16,7 @@ export function createPanelRegistry(browser = window) {
         if (asset) registrationErrors.set(asset, message)
         fail(message)
       }
-      const declaration = [...approved.values()].find(item => item.owner_app === entry?.app && item.renderer === entry?.renderer && item.version === entry?.version && assetKey(item.js) === asset)
+      const declaration = (assetDeclarations.get(asset) || []).find(item => item.owner_app === entry?.app && item.renderer === entry?.renderer && item.version === entry?.version && assetKey(item.js) === asset)
       if (!declaration || typeof entry.create !== 'function') rejectRegistration('undeclared or incompatible registration')
       const key = rendererKey(declaration)
       if (factories.has(key) && factories.get(key) !== entry.create) rejectRegistration('duplicate factory')
@@ -26,6 +27,7 @@ export function createPanelRegistry(browser = window) {
     const key = assetKey(asset)
     if (loads.has(key)) return loads.get(key)
     registrationErrors.delete(key)
+    if (kind === 'js') assetDeclarations.set(key, [...approved.values()].filter(item => assetKey(item.js) === key))
     const node = browser.document.createElement(kind === 'js' ? 'script' : 'link')
     node.dataset.crmPanelAsset = key
     if (kind === 'js') node.src = asset.url
@@ -37,7 +39,7 @@ export function createPanelRegistry(browser = window) {
     }).catch(error => {
       node.remove()
       loads.delete(key)
-      for (const [renderer, item] of approved) if (assetKey(item.js) === key) factories.delete(renderer)
+      for (const item of assetDeclarations.get(key) || []) factories.delete(rendererKey(item))
       throw error
     })
     loads.set(key, promise)
@@ -57,7 +59,7 @@ export function createPanelRegistry(browser = window) {
         browser.document.querySelectorAll('script[data-crm-panel-asset]').forEach(node => {
           if (node.dataset.crmPanelAsset === assetKey(descriptor.js)) node.remove()
         })
-        factories.delete(key)
+        for (const item of assetDeclarations.get(assetKey(descriptor.js)) || []) factories.delete(rendererKey(item))
         fail(registrationErrors.get(assetKey(descriptor.js)) || 'bundle did not register its declared renderer')
       }
       return factories.get(key)

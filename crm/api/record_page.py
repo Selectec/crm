@@ -110,7 +110,7 @@ def collect_panels(doctype):
 						{"id": panel_id, "name": f"{key}:{panel_id}", "label": label, "icon": icon}
 					)
 				default = declaration.get("default_panel")
-				if default is not None and default not in ids:
+				if default is not None and (not isinstance(default, str) or default not in ids):
 					invalid("default panel must belong to the contribution")
 				css = declaration.get("css", [])
 				if not isinstance(css, list):

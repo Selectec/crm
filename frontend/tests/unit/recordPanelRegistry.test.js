@@ -54,4 +54,17 @@ describe('approved IIFE renderer loading', () => {
     expect(await retried).toBeTypeOf('function')
   })
 
+  it('allows an already approved in-flight IIFE to finish without granting a withdrawn new load', async () => {
+    transport()
+    const registry=createPanelRegistry(window), old=contribution('old')
+    registry.approve([old])
+    const pending=registry.load(old)
+    registry.approve([contribution('current')])
+    executing(nodes[0])
+    expect(()=>window.crmRecordPagePanels.register({app:'old',renderer:'summary',version:1,create(){return {}}})).not.toThrow()
+    nodes[0].dispatchEvent(new Event('load'))
+    expect(await pending).toBeTypeOf('function')
+    await expect(registry.load(old)).rejects.toThrow('no longer declared')
+  })
+
 })

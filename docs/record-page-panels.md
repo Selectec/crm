@@ -63,7 +63,9 @@ window.crmRecordPagePanels.register({
 The registry exists before asset loading. It verifies the executing approved
 asset and exact declared app/renderer/version. Undeclared registrations, different
 duplicate factories and absent registrations fail the contributor load. Identical
-factory retries are accepted. Pending/successful asset promises are cached by
+factory retries are accepted. An already approved in-flight asset can finish
+registration against its load-time declarations after navigation; current
+discovery still controls new loads and stale host generations cannot mount it. Pending/successful asset promises are cached by
 URL/revision; failures remove their scripts/cache entries so Retry can reload.
 Native and other app panels remain available when one contributor fails. Installed
 apps are trusted code; the registry prevents accidental ownership/dispatch errors
@@ -93,6 +95,9 @@ business reads while inactive and refresh when active again without discarding
 its unsent draft. Current parent permission never substitutes for source permission.
 
 Each contribution gets one persistent group outside native TabsContent parents.
+Contributed native tab buttons control that group through aria-controls; the
+active method labels it through aria-labelledby. Native pane associations remain
+unchanged.
 Its component remains mounted across local method and native/other-contributor tab
 switches, with active/panel changes delivered reactively. A same-record reload
 updates doc and discovery descriptors while preserving component, selection,
@@ -100,7 +105,7 @@ drafts and resources. Ownership includes typed identity, contribution/renderer,
 version and JS/CSS asset revisions. Different record identity or asset revision
 remounts; removal unmounts and falls back to an available native pane. Apps must
 release listeners/resources with onUnmounted. Generation guards suppress delayed
-discovery/loading after typed navigation or unmount. Already loaded JavaScript
+discovery/loading after typed navigation, a cleared native resource or unmount. Already loaded JavaScript
 cannot be unloaded: app removal or release changes require normal session reload.
 
 ## Maintained proof and actual runtime gate

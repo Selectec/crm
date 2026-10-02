@@ -118,6 +118,10 @@ describe('existing native relationship pages',()=>{
     expect(tabs.map(tab=>tab.getAttribute('aria-label') || tab.textContent.trim().replace(/\s*\d+$/, ''))).toEqual(['Activity','Notes',...related])
     expect(element.querySelectorAll('[role="tablist"]')).toHaveLength(1)
     expect(tabs[0].getAttribute('aria-selected')).toBe('true')
+    const richPanel=document.getElementById(tabs[0].getAttribute('aria-controls'))
+    expect(richPanel?.dataset.crmPanel).toBe('demo:activity')
+    expect(richPanel.getAttribute('aria-labelledby')).toBe(tabs[0].id)
+    expect(richPanel.style.display).not.toBe('none')
     if (!label.startsWith('Mobile')) expect(element.textContent).toContain('Record information')
     // Native Reka Tabs activates on mousedown or Enter/Space, not synthetic click.
     tabs[1].dispatchEvent(label === 'Organization'
@@ -125,6 +129,9 @@ describe('existing native relationship pages',()=>{
       : new KeyboardEvent('keydown', {key:'Enter',bubbles:true}))
     await settle()
     expect(tabs[1].getAttribute('aria-selected')).toBe('true')
+    expect(document.getElementById(tabs[1].getAttribute('aria-controls'))).toBe(richPanel)
+    expect(richPanel.getAttribute('aria-labelledby')).toBe(tabs[1].id)
+    expect(richPanel.style.display).not.toBe('none')
     expect(element.textContent).toContain(context+':Same Name:Notes')
     const create=[...element.querySelectorAll('button')].find(button=>button.textContent==='New Note')
     create.click();await settle()
@@ -245,6 +252,16 @@ describe('generic contributor lifecycle',()=>{
     expect(created).toBe(1)
     expect(element.textContent).toContain('CRM Organization')
     expect(element.textContent).not.toContain('Contact')
+  })
+  it('invalidates pending discovery when the native resource clears its document',async()=>{
+    const record=reactive({doc:{doctype:'Contact',name:'Same Name'}})
+    let resolve
+    fixture.discovery=context=>new Promise(done=>{resolve=()=>done({context,contributions:[appPanel('stale')],diagnostics:[]})})
+    const Harness={setup(){const panels=useRecordPagePanels({record,scripts:{data:[]},nativeTabs:[{name:'native:Details',label:'Details'}],context:{router:{}}});return ()=>h(RecordPagePanels,{groups:panels.groups.value})}}
+    await open(Harness,{})
+    record.doc=null;await settle()
+    resolve();await settle()
+    expect(element.querySelector('section[data-crm-panel]')).toBeNull()
   })
   it('suppresses delayed old typed-record discovery and disposes on unmount',async()=>{
     const record=reactive({doc:{doctype:'Contact',name:'Same Name'},reload(){}})
