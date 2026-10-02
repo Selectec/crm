@@ -133,6 +133,7 @@
           <component :is="tab.icon" v-if="tab.icon" class="h-5" />
           {{ __(tab.label) }}
           <Badge
+            v-if="tab.count !== undefined"
             class="group-hover:bg-surface-gray-10"
             :class="[selected ? 'bg-surface-gray-10' : 'bg-gray-600']"
             variant="solid"
@@ -144,16 +145,28 @@
         </button>
       </template>
       <template #tab-panel="{ tab }">
+        <component
+          v-if="relationshipActivity && relationshipActivity.tabs.some((method) => method.name === tab.name)"
+          :is="relationshipActivity.component"
+          :key="'Contact:' + props.contactId"
+          doctype="Contact"
+          :docname="props.contactId"
+          :doc="contact.doc"
+          :method="tab.name"
+          :tabs="relationshipActivity.tabs"
+          :changeTab="changeActivityTab"
+        />
         <DealsListView
-          v-if="tab.label === 'Deals' && rows.length"
+          v-if="!tab.name && tab.label === 'Deals' && rows.length"
           class="mt-4"
           :rows="rows"
           :columns="columns"
           :options="{ selectable: false, showTooltip: false }"
         />
-        <EmptyState v-if="!rows.length" :icon="tab.icon" name="Deals" />
+        <EmptyState v-if="!rows.length && !tab.name" :icon="tab.icon" name="Deals" />
       </template>
     </Tabs>
+    <ErrorMessage v-if="relationshipActivityError" :message="relationshipActivityError" />
   </div>
   <ErrorPage
     v-else-if="errorTitle"
@@ -171,6 +184,7 @@
 
 <script setup>
 import ErrorPage from '@/components/ErrorPage.vue'
+import { useRelationshipUI } from '@/components/Activities/relationshipUI'
 import Resizer from '@/components/Resizer.vue'
 import Icon from '@/components/Icon.vue'
 import SidePanelLayout from '@/components/SidePanelLayout.vue'
@@ -205,7 +219,7 @@ import {
 } from 'frappe-ui'
 import { useDoctypeModal } from '@/composables/doctypeModal'
 import { useTelemetry } from 'frappe-ui/frappe'
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, markRaw } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
 
@@ -298,8 +312,21 @@ function changeContactImage(file) {
   })
 }
 
+const relationshipActivity = ref(null)
+const relationshipActivityError = ref('')
+const relationshipUI = useRelationshipUI(router)
+const tabs = computed(() => [
+  ...(relationshipActivity.value?.tabs || []),
+  ...nativeTabs,
+])
+
+function changeActivityTab(name) {
+  const index = tabs.value.findIndex((tab) => tab.name === name)
+  if (index >= 0) tabIndex.value = index
+}
+
 const tabIndex = ref(0)
-const tabs = [
+const nativeTabs = [
   {
     label: 'Deals',
     icon: DealsIcon,
@@ -434,12 +461,15 @@ function showAddressModal(_address) {
   })
 }
 
-// Setup custom actions from Form Scripts
+// Compose managed activity content alongside existing native custom actions.
+let customizationGeneration = 0
 watch(
-  () => contact.doc,
-  async (_doc) => {
-    if (scripts.data?.length) {
-      let s = await setupCustomizations(scripts.data, {
+  [() => contact.doc, () => scripts.data],
+  async ([_doc, _scripts]) => {
+    if (!_doc || !_scripts) return
+    const generation = ++customizationGeneration
+    try {
+      const customization = await setupCustomizations(_scripts, {
         doc: _doc,
         $dialog,
         $socket,
@@ -449,10 +479,24 @@ watch(
         createToast: toast.create,
         deleteDoc: deleteContact,
         call,
+        relationshipUI,
       })
-      contact._actions = s.actions || []
+      if (generation !== customizationGeneration) return
+      contact._actions = customization.actions || []
+      const initial = !relationshipActivity.value
+      relationshipActivity.value = customization.relationshipActivity
+        ? markRaw(customization.relationshipActivity)
+        : null
+      relationshipActivityError.value = ''
+      if (initial && relationshipActivity.value) {
+        changeActivityTab(relationshipActivity.value.initialTab)
+      }
+    } catch (error) {
+      if (generation === customizationGeneration) {
+        relationshipActivityError.value = error.message || __('Could not load relationship activity.')
+      }
     }
   },
-  { once: true },
+  { immediate: true },
 )
 </script>

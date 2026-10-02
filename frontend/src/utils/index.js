@@ -7,6 +7,7 @@ import { gemoji } from 'gemoji'
 import DOMPurify from 'dompurify'
 import { toast, dayjsLocal, dayjs, getConfig, FeatherIcon } from 'frappe-ui'
 import { h } from 'vue'
+import { collectRelationshipActivity } from './relationshipActivity'
 
 export function formatTime(seconds) {
   const days = Math.floor(seconds / (3600 * 24))
@@ -371,14 +372,16 @@ export async function setupCustomizations(scripts, obj) {
 
   let statuses = []
   let actions = []
+  const customizations = []
   if (Array.isArray(scripts)) {
     for (let s of scripts) {
       let _script = await getFormScript(s.script, obj)
+      customizations.push(_script)
       actions = actions.concat(_script?.actions || [])
       statuses = statuses.concat(_script?.statuses || [])
     }
   }
-  return { statuses, actions }
+  return { statuses, actions, relationshipActivity: collectRelationshipActivity(customizations) }
 }
 
 async function getListScript(script, obj) {
