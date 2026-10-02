@@ -16,8 +16,8 @@
           </div>
           <div class="flex items-center gap-1">
             <CustomActions
-              v-if="document.actions?.length"
-              :actions="document.actions"
+              v-if="(editorDoc ? editorActions : document.actions)?.length"
+              :actions="editorDoc ? editorActions : document.actions"
               :close="() => (show = false)"
             />
             <Button
@@ -38,12 +38,18 @@
         </div>
         <div>
           <FieldLayout
-            v-if="layout.data"
+            v-if="
+              layout.data &&
+              !initializing &&
+              !loadFailed &&
+              (!fullDocumentSave || !docname || editorDoc)
+            "
             :tabs="layout.data"
             :data="doc"
             :doctype="doctype"
             :docname="docname"
             :readOnly="readOnly"
+            :context="editorDoc ? editorContext : null"
           />
           <ErrorMessage v-if="error" class="mt-4" :message="__(error)" />
         </div>
@@ -53,7 +59,18 @@
           <Button
             variant="solid"
             :label="editMode ? __('Update') : __('Create')"
-            :loading="editMode ? document.save.loading : create.loading"
+            :loading="
+              editMode
+                ? fullDocumentSave
+                  ? documentSave.loading
+                  : document.save.loading
+                : create.loading
+            "
+            :disabled="
+              initializing ||
+              loadFailed ||
+              (fullDocumentSave && editMode && !editorDoc)
+            "
             @click="editMode ? update() : create()"
           />
         </div>
@@ -67,13 +84,14 @@ import EditIcon from '@/components/Icons/EditIcon.vue'
 import FieldLayout from '@/components/FieldLayout/FieldLayout.vue'
 import CustomActions from '@/components/CustomActions.vue'
 import { useDocument } from '@/data/document'
+import { useAttachments } from '@/composables/useAttachments'
 import { globalStore } from '@/stores/global'
 import { usersStore } from '@/stores/users'
 import { showQuickEntryModal, quickEntryProps } from '@/composables/modals'
 import { isMobileView } from '@/composables/settings'
 import { setupCustomizations } from '@/utils'
 import { call, createResource, toast } from 'frappe-ui'
-import { ref, computed, watch, nextTick, onMounted } from 'vue'
+import { ref, reactive, computed, watch, nextTick, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 
 const props = defineProps({
@@ -82,6 +100,7 @@ const props = defineProps({
   docname: { type: String, default: '' },
   defaults: { type: Object, default: () => ({}) },
   readOnly: { type: Boolean, default: false },
+  fullDocumentSave: { type: Boolean, default: false },
 })
 
 const show = defineModel({ type: Boolean })
@@ -92,11 +111,50 @@ const router = useRouter()
 
 const { isManager } = usersStore()
 const { $dialog, $socket } = globalStore()
+const { processPendingDeletions } = useAttachments(
+  props.doctype,
+  props.docname || null,
+)
 
-const { document, scripts, triggerOnRender, triggerOnBeforeCreate } =
-  useDocument(props.doctype, props.docname || null)
+const {
+  document,
+  scripts,
+  triggerOnRender,
+  triggerOnBeforeCreate,
+  setupFormScript,
+  getControllers,
+} = useDocument(props.doctype, props.docname || null)
 
-const doc = computed(() => document.doc || {})
+const editor = useDocument(
+  props.doctype,
+  props.docname || null,
+  {},
+  reactive({ doc: null, actions: [], fieldPropertyOverrides: {}, fieldHtmlMap: {} }),
+)
+const editorDoc = computed({
+  get: () => editor.document.doc,
+  set: (value) => (editor.document.doc = value),
+})
+const doc = computed(() => editorDoc.value || document.doc || {})
+const fullDocumentSave = ref(props.fullDocumentSave)
+const readOnly = ref(props.readOnly)
+const initializing = ref(Boolean(props.docname))
+const loadFailed = ref(false)
+
+const editorActions = computed(() => editor.document.actions)
+
+const editorContext = {
+  get fieldPropertyOverrides() {
+    return editor.document.fieldPropertyOverrides || {}
+  },
+  get fieldHtmlMap() {
+    return editor.document.fieldHtmlMap || {}
+  },
+  triggerOnChange: editor.triggerOnChange,
+  triggerButton: editor.triggerButton,
+  triggerOnRowAdd: editor.triggerOnRowAdd,
+  triggerOnRowRemove: editor.triggerOnRowRemove,
+}
 
 const layout = createResource({
   url: 'crm.fcrm.doctype.crm_fields_layout.crm_fields_layout.get_fields_layout',
@@ -106,7 +164,9 @@ const layout = createResource({
 })
 
 const error = ref(null)
-const editMode = computed(() => Boolean(document.doc?.name))
+const editMode = computed(
+  () => Boolean(document.doc?.name) || Boolean(props.docname),
+)
 
 const _create = createResource({
   url: 'frappe.client.insert',
@@ -131,7 +191,7 @@ const _create = createResource({
 })
 
 async function create() {
-  if (props.readOnly) return
+  if (readOnly.value) return
   await triggerOnBeforeCreate?.()
 
   _create.submit({
@@ -142,8 +202,50 @@ async function create() {
   })
 }
 
-function update() {
-  if (props.readOnly) return
+const documentSave = createResource({
+  url: 'frappe.client.save',
+  onSuccess: async (d) => {
+    document.doc = d
+    editorDoc.value = JSON.parse(JSON.stringify(d))
+    let hookFailed = false
+    try {
+      await editor.triggerOnSave?.()
+    } catch (err) {
+      hookFailed = true
+      error.value =
+        err.messages?.[0] || err.message || 'Could not complete save handler'
+    }
+    processPendingDeletions()
+    emit('afterUpdate', d)
+    if (!hookFailed) show.value = false
+  },
+  onError: async (err) => {
+    error.value = err.messages?.[0] || err.message || 'Could not update document'
+    try {
+      await editor.triggerOnError?.()
+    } catch (hookError) {
+      error.value +=
+        '\n' +
+        (hookError.messages?.[0] ||
+          hookError.message ||
+          'Could not complete error handler')
+    }
+  },
+})
+
+async function update() {
+  if (readOnly.value || initializing.value || loadFailed.value) return
+  if (fullDocumentSave.value) {
+    error.value = null
+    try {
+      await editor.triggerOnValidate?.()
+      await documentSave.submit({ doc: { ...doc.value } })
+    } catch (err) {
+      error.value ||=
+        err.messages?.[0] || err.message || 'Could not update document'
+    }
+    return
+  }
   document.save.submit(null, {
     onSuccess: (d) => {
       emit('afterUpdate', d)
@@ -179,10 +281,43 @@ watch(
 )
 
 onMounted(async () => {
-  document.doc = {
-    ...document.doc,
-    ...props.defaults,
+  try {
+    if (props.docname) {
+      await document.reload?.()
+      await setupFormScript?.()
+      const modalOptions = await Promise.all(
+        (getControllers?.() || []).map(
+          (controller) => controller.modalOptions || {},
+        ),
+      )
+      fullDocumentSave.value ||= modalOptions.some(
+        (options) => options?.fullDocumentSave === true,
+      )
+      readOnly.value ||= modalOptions.some(
+        (options) => options?.readOnly === true,
+      )
+    }
+    if (fullDocumentSave.value && props.docname) {
+      // A local working copy keeps the loaded revision and unsent fields while
+      // the shared resource continues to receive realtime changes.
+      editorDoc.value = JSON.parse(
+        JSON.stringify({ ...document.doc, ...props.defaults }),
+      )
+      await editor.setupFormScript?.()
+      await editor.triggerOnRender?.()
+    } else {
+      document.doc = {
+        ...document.doc,
+        ...props.defaults,
+      }
+      await triggerOnRender()
+    }
+  } catch (err) {
+    editorDoc.value = null
+    loadFailed.value = true
+    error.value = err.messages?.[0] || err.message || 'Could not load document'
+  } finally {
+    initializing.value = false
   }
-  await triggerOnRender()
 })
 </script>

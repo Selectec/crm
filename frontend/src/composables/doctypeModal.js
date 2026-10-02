@@ -7,6 +7,7 @@ const title = ref('')
 const defaults = ref({})
 const callbacks = ref({})
 const readOnly = ref(false)
+const fullDocumentSave = ref(false)
 
 function showModal({
   name: _name = null,
@@ -15,6 +16,7 @@ function showModal({
   defaults: _defaults = {},
   callbacks: _callbacks = {},
   readOnly: _readOnly = false,
+  fullDocumentSave: _fullDocumentSave = false,
 }) {
   name.value = _name
   doctype.value = _doctype
@@ -22,6 +24,7 @@ function showModal({
   defaults.value = _defaults
   callbacks.value = _callbacks
   readOnly.value = _readOnly
+  fullDocumentSave.value = _fullDocumentSave
   show.value = true
 }
 
@@ -37,6 +40,7 @@ export function useDoctypeModal() {
     title,
     defaults,
     readOnly,
+    fullDocumentSave,
     showModal,
     triggerCallback,
   }
