@@ -120,6 +120,7 @@
       </div>
     </Resizer>
     <Tabs
+      :class="{ 'record-panels-selected': panelSelected }"
       v-model="tabIndex"
       as="div"
       :tabs="tabs"
@@ -130,7 +131,8 @@
           class="group flex items-center gap-2 border-b border-transparent py-2.5 text-base text-ink-gray-5 duration-300 ease-in-out hover:text-ink-gray-9"
           :class="{ 'text-ink-gray-9': selected }"
         >
-          <component :is="tab.icon" v-if="tab.icon" class="h-5" />
+          <span v-if="typeof tab.icon === 'string'" :class="tab.icon" class="h-5 w-5" />
+          <component :is="tab.icon" v-else-if="tab.icon" class="h-5" />
           {{ __(tab.label) }}
           <Badge
             v-if="tab.count !== undefined"
@@ -145,28 +147,23 @@
         </button>
       </template>
       <template #tab-panel="{ tab }">
-        <component
-          v-if="isActivityTab(tab)"
-          :is="relationshipActivity.component"
-          :key="'Contact:' + props.contactId"
-          doctype="Contact"
-          :docname="props.contactId"
-          :doc="contact.doc"
-          :method="tab.name"
-          :tabs="relationshipActivity.tabs"
-          :changeTab="changeActivityTab"
-        />
         <DealsListView
-          v-if="!tab.name && tab.label === 'Deals' && rows.length"
+          v-if="tab.name === 'native:Deals' && rows.length"
           class="mt-4"
           :rows="rows"
           :columns="columns"
           :options="{ selectable: false, showTooltip: false }"
         />
-        <EmptyState v-if="!rows.length && !tab.name" :icon="tab.icon" name="Deals" />
+        <EmptyState v-if="!rows.length && ['native:Deals', 'native:Contacts'].includes(tab.name)" :icon="tab.icon" name="Deals" />
       </template>
     </Tabs>
-    <ErrorMessage v-if="relationshipActivityError" :message="relationshipActivityError" />
+    <RecordPagePanels :groups="recordPanels" @retry="retryPanels" />
+    <p v-if="recordPanelsLoading && !recordPanels.length" role="status">{{ __('Loading panels...') }}</p>
+    <div v-if="recordPanelsError">
+      <ErrorMessage :message="recordPanelsError" />
+      <Button :label="__('Retry')" @click="retryPanels" />
+    </div>
+    <p v-for="(diagnostic, index) in recordPanelDiagnostics" :key="index" role="status">{{ diagnostic.message }}</p>
   </div>
   <ErrorPage
     v-else-if="errorTitle"
@@ -184,7 +181,8 @@
 
 <script setup>
 import ErrorPage from '@/components/ErrorPage.vue'
-import { useRelationshipActivity } from '@/composables/useRelationshipActivity'
+import { useRecordPagePanels } from '@/composables/useRecordPagePanels'
+import RecordPagePanels from '@/components/RecordPagePanels.vue'
 import Resizer from '@/components/Resizer.vue'
 import Icon from '@/components/Icon.vue'
 import SidePanelLayout from '@/components/SidePanelLayout.vue'
@@ -314,6 +312,7 @@ function changeContactImage(file) {
 
 const nativeTabs = [
   {
+    name: 'native:Deals',
     label: 'Deals',
     icon: DealsIcon,
     count: computed(() => deals.data?.length),
@@ -321,13 +320,15 @@ const nativeTabs = [
 ]
 
 const {
-  activity: relationshipActivity,
-  error: relationshipActivityError,
+  groups: recordPanels,
+  error: recordPanelsError,
+  diagnostics: recordPanelDiagnostics,
+  loading: recordPanelsLoading,
   tabs,
   tabIndex,
-  changeTab: changeActivityTab,
-  isActivityTab,
-} = useRelationshipActivity({
+  panelSelected,
+  retry: retryPanels,
+} = useRecordPagePanels({
   record: contact,
   scripts,
   nativeTabs,
@@ -472,3 +473,8 @@ function showAddressModal(_address) {
 }
 
 </script>
+
+<style scoped>
+.record-panels-selected { flex: 0 0 auto; }
+.record-panels-selected :deep([role='tabpanel']) { display: none !important; }
+</style>

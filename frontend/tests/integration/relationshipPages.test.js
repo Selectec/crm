@@ -14,11 +14,13 @@ import NoteArea from '@/components/Activities/NoteArea.vue'
 import DoctypeModals from '@/components/Modals/DoctypeModals.vue'
 import { useDoctypeModal } from '@/composables/doctypeModal'
 import { setupCustomizations } from '@/utils'
+import { useRecordPagePanels } from '@/composables/useRecordPagePanels'
+import RecordPagePanels from '@/components/RecordPagePanels.vue'
 
 // External boot data used by genuine native date/timestamp controls.
 window.sysdefaults = { ...window.sysdefaults, date_format: 'yyyy-mm-dd', time_format: 'HH:mm:ss' }
 
-const fixture = vi.hoisted(() => ({ enabled: true, script: null, documents: new Map(), requests: [], requestOptions: [] }))
+const fixture = vi.hoisted(() => ({ enabled: true, script: null, contributions: null, rendererFactory: null, discovery: null, loadFailure: null, rendererLoad: null, documents: new Map(), requests: [], requestOptions: [] }))
 vi.mock('@/data/document', async () => {
   const { reactive } = await import('vue')
   return { useDocument(doctype, name) {
@@ -30,17 +32,7 @@ vi.mock('@/data/document', async () => {
     return {
       document: fixture.documents.get(key),
       permissions: { data: { permissions: { delete: false } } },
-      scripts: { data: fixture.enabled && ['CRM Organization', 'Contact'].includes(doctype) ? [{ script: fixture.script || `
-        function setupForm({relationshipUI}) {
-          const {h, showModal} = relationshipUI;
-          return {relationshipActivity: {version:1, initialTab:'Activity',
-            tabs: [{name:'Activity',label:'Activity'},{name:'Notes',label:'Notes'}],
-            component: {props:['doctype','docname','method'], setup(p) {
-              return () => h('div', [h('span', p.doctype + ':' + p.docname + ':' + p.method),
-                p.method === 'Notes' ? h('button',{onClick:()=>showModal({doctype:'FCRM Note',title:'Note',defaults:{reference_doctype:p.doctype,reference_docname:p.docname}})},'New Note') : null]);
-            }} }};
-        }
-      ` }] : [] },
+      scripts: { data: fixture.script ? [{script:fixture.script}] : [] },
       triggerOnRender: async () => {}, triggerOnBeforeCreate: async () => {},
     }
   } }
@@ -48,7 +40,13 @@ vi.mock('@/data/document', async () => {
 vi.mock('frappe-ui', async (original) => {
   const actual = await original()
   const { reactive } = await import('vue')
-  return { ...actual, usePageMeta() {}, createListResource() { return reactive({data: []}) },
+  return { ...actual, call: async (method, context) => {
+    if (method === 'crm.api.record_page.get_panels') {
+      if (fixture.discovery) return fixture.discovery(context)
+      return {context, contributions: fixture.contributions || (fixture.enabled ? [{key:'demo:activity',id:'activity',owner_app:'demo',renderer:'activity',version:1,js:{url:'/assets/demo/demo.bundle.js',revision:'one'},css:[],default_panel:'Activity',panels:[{id:'Activity',name:'demo:activity:Activity',label:'Activity'},{id:'Notes',name:'demo:activity:Notes',label:'Notes'}]}] : []),diagnostics:[]}
+    }
+    return actual.call(method,context)
+  }, usePageMeta() {}, createListResource() { return reactive({data: []}) },
     createResource(options) {
       fixture.requests.push(options.url)
       fixture.requestOptions.push(options)
@@ -60,6 +58,16 @@ vi.mock('frappe-ui', async (original) => {
     },
   }
 })
+
+vi.mock('@/utils/recordPanelRegistry', () => ({getPanelRegistry:()=>({approve(){},async load(descriptor){
+  if (fixture.rendererLoad) return fixture.rendererLoad(descriptor)
+  if (fixture.loadFailure === descriptor.owner_app) throw new Error('Asset unavailable')
+  if (fixture.rendererFactory) return runtime=>fixture.rendererFactory(runtime,descriptor)
+  return runtime=>({props:['context'],setup(props){return ()=>runtime.h('div',[
+    runtime.h('span',props.context.doctype+':'+props.context.name+':'+props.context.panel),
+    props.context.panel==='Notes' ? runtime.h('button',{onClick:()=>runtime.showModal({doctype:'FCRM Note',title:'Note',defaults:{reference_doctype:props.context.doctype,reference_docname:props.context.name}})},'New Note'):null
+  ])}})
+}})}))
 vi.mock('@/stores/settings', async () => {
   const { reactive, ref } = await import('vue')
   const settings = { brand: reactive({}), settings: ref({}), _settings: reactive({doc:{}}) }
@@ -85,7 +93,7 @@ vi.mock('@/components/DeleteLinkedDocModal.vue', () => ({default:{render:()=>nul
 
 let app, element
 async function settle() { for(let i=0;i<8;i++) { await nextTick(); await new Promise(resolve=>setTimeout(resolve,0)) } }
-afterEach(()=>{app?.unmount();element?.remove();document.body.innerHTML='';fixture.documents.clear();fixture.script=null;fixture.enabled=true;useDoctypeModal().show.value=false})
+afterEach(()=>{app?.unmount();element?.remove();document.body.innerHTML='';fixture.documents.clear();fixture.script=null;fixture.contributions=null;fixture.rendererFactory=null;fixture.discovery=null;fixture.loadFailure=null;fixture.rendererLoad=null;fixture.enabled=true;useDoctypeModal().show.value=false})
 async function open(Page, props) {
   const router=createRouter({history:createMemoryHistory(),routes:[{path:'/',name:'Test',component:{render:()=>null}},{path:'/organizations',name:'Organizations',component:{render:()=>null}},{path:'/contacts',name:'Contacts',component:{render:()=>null}},{path:'/organizations/:organizationId',name:'Organization',component:{render:()=>null}},{path:'/contacts/:contactId',name:'Contact',component:{render:()=>null}}]})
   await router.push('/');await router.isReady()
@@ -130,34 +138,26 @@ describe('existing native relationship pages',()=>{
       expect(element.textContent).toContain('Record information')
     }
   })
-  it('rejects a contributed Details method and retains native mobile record information', async () => {
-    fixture.script = `function setupForm({relationshipUI}) {
-      return {relationshipActivity:{version:1,initialTab:'Activity',
-        tabs:[{name:'Activity',label:'Activity'},{name:'Details',label:'Details'}],
-        component:{render:()=>relationshipUI.h('div','Contributed replacement')}}};
-    }`
+  it('permits the same label as a native pane without dispatch collisions', async () => {
+    fixture.contributions=[{key:'demo:summary',owner_app:'demo',renderer:'summary',version:1,js:{url:'/assets/demo/summary.bundle.js',revision:'one'},css:[],default_panel:'summary',panels:[{id:'summary',name:'demo:summary:summary',label:'Details'}]}]
     await open(MobileOrganization,{organizationId:'Same Name'})
-    expect(element.textContent).toContain('Invalid relationship activity contribution')
-    expect([...element.querySelectorAll('[role="tab"]')].map(tab=>tab.textContent.trim().replace(/\s*\d+$/, ''))).toEqual(['Details','Deals','Contacts'])
-    expect(element.textContent).toContain('Record information')
-    expect(element.textContent).not.toContain('Contributed replacement')
+    expect([...element.querySelectorAll('[role="tab"]')].map(tab=>tab.getAttribute('aria-label') || tab.textContent.trim().replace(/\s*\d+$/, ''))).toEqual(['Details','Record information','Deals','Contacts'])
+    expect(element.textContent).toContain('CRM Organization:Same Name:summary')
+    expect(element.querySelector('section[data-crm-panel]').textContent).not.toContain('Record information')
   })
   it('keeps an unsent composer draft while refreshing document props and native header actions', async () => {
-    fixture.script = `function setupForm({doc,relationshipUI}) {
-      const {h,ref} = relationshipUI;
-      return {actions:[{label:'Action: '+doc.full_name,onClick(){}}],
-        relationshipActivity:{version:1,initialTab:'Notes',tabs:[{name:'Notes',label:'Notes'}],
-          component:{props:['doc'],setup(props){
-            const draft=ref('');
-            return ()=>h('div',[h('span','Current record: '+props.doc.full_name),
-              h('textarea',{'aria-label':'Unsent note draft',value:draft.value,onInput:event=>draft.value=event.target.value})]);
-          }}}};
-    }`
+    fixture.script = `function setupForm({doc}) {return {actions:[{label:'Action: '+doc.full_name,onClick(){}}]}}`
+    fixture.rendererFactory=runtime=>({props:['context'],setup(props){
+      const draft=runtime.ref(''); return ()=>runtime.h('div',[runtime.h('span','Current record: '+props.context.doc.full_name),runtime.h('textarea',{'aria-label':'Unsent note draft',value:draft.value,onInput:event=>draft.value=event.target.value})])
+    }})
     await open(Contact,{contactId:'Same Name'})
     const composer=element.querySelector('textarea[aria-label="Unsent note draft"]')
     composer.value='My unsent note'
     composer.dispatchEvent(new Event('input',{bubbles:true}))
     await settle()
+    const tabs=[...element.querySelectorAll('[role="tab"]')]
+    for (const tab of [tabs[1],tabs[2],tabs[0]]) { tab.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true})); await settle() }
+    expect(element.querySelector('textarea[aria-label="Unsent note draft"]')).toBe(composer)
     fixture.documents.get('Contact:Same Name').doc={doctype:'Contact',name:'Same Name',full_name:'After reload'}
     await settle()
     expect(element.textContent).toContain('Current record: After reload')
@@ -171,6 +171,97 @@ describe('existing native relationship pages',()=>{
   })
 })
 
+
+
+const appPanel=(app,id='summary')=>({key:`${app}:${id}`,id,owner_app:app,renderer:id,version:1,js:{url:`/assets/${app}/${id}.bundle.js`,revision:'one'},css:[],default_panel:id,panels:[{id,name:`${app}:${id}:${id}`,label:'Summary'}]})
+describe('generic contributor lifecycle',()=>{
+  for(const [Page,props] of [[Organization,{organizationId:'Same Name'}],[Contact,{contactId:'Same Name'}],[MobileOrganization,{organizationId:'Same Name'}],[MobileContact,{contactId:'Same Name'}]]) it(`coexists and removes contributors on ${Page.__name}`,async()=>{
+    fixture.contributions=[appPanel('first'),appPanel('second')]
+    const unmounted=[]
+    fixture.rendererFactory=(runtime,descriptor)=>({props:['context'],setup(props){runtime.onUnmounted(()=>unmounted.push(descriptor.owner_app));return ()=>runtime.h('p',descriptor.owner_app+':'+props.context.doctype+':'+props.context.name)}})
+    await open(Page,props)
+    expect(element.querySelectorAll('section[data-crm-panel]')).toHaveLength(2)
+    expect(element.querySelectorAll('[role="tablist"]')).toHaveLength(1)
+    fixture.contributions=[]
+    const record=[...fixture.documents.values()][0]
+    record.doc={...record.doc}
+    await settle()
+    expect(element.querySelectorAll('section[data-crm-panel]')).toHaveLength(0)
+    expect(unmounted.sort()).toEqual(['first','second'])
+    expect([...element.querySelectorAll('[role="tab"]')].every(tab=>!tab.textContent.includes('Summary'))).toBe(true)
+    expect(element.querySelector('[role="tab"][aria-selected="true"]')).not.toBeNull()
+  })
+  it('isolates a failed asset contributor and supports retry without losing native tabs',async()=>{
+    fixture.contributions=[appPanel('first'),appPanel('second')]
+    fixture.loadFailure='first'
+    await open(Contact,{contactId:'Same Name'})
+    expect(element.textContent).toContain('Asset unavailable')
+    expect(element.querySelectorAll('section[data-crm-panel]')).toHaveLength(2)
+    expect(element.textContent).toContain('Deals')
+    fixture.loadFailure=null
+    const retry=[...element.querySelectorAll('button')].find(button=>button.textContent==='Retry')
+    retry.click();await settle()
+    expect(element.textContent).not.toContain('Asset unavailable')
+    expect(element.querySelectorAll('section[data-crm-panel]')).toHaveLength(2)
+  })
+  it('replaces a group on asset revision or typed identity changes and retains it on document reload',async()=>{
+    fixture.contributions=[appPanel('demo')]
+    let created=0,disposed=0
+    fixture.rendererFactory=runtime=>({props:['context'],setup(props){created++;runtime.onUnmounted(()=>disposed++);const draft=runtime.ref('');return ()=>runtime.h('textarea',{'aria-label':'Owned draft',value:draft.value,onInput:e=>draft.value=e.target.value})}})
+    await open(Contact,{contactId:'Same Name'})
+    const record=fixture.documents.get('Contact:Same Name')
+    const first=element.querySelector('textarea');first.value='Keep';first.dispatchEvent(new Event('input',{bubbles:true}));await settle()
+    record.doc={...record.doc};await settle()
+    expect(created).toBe(1);expect(element.querySelector('textarea')).toBe(first)
+    fixture.contributions=[{...appPanel('demo'),js:{url:'/assets/demo/summary.NEW.js',revision:'two'}}]
+    record.doc={...record.doc};await settle()
+    expect(created).toBe(2);expect(disposed).toBe(1);expect(element.querySelector('textarea').value).toBe('')
+    record.doc={doctype:'CRM Organization',name:'Same Name'};await settle()
+    expect(created).toBe(3);expect(disposed).toBe(2)
+  })
+  it('shows discovery errors separately from empty content and retries',async()=>{
+    fixture.discovery=async()=>{throw new Error('Discovery failed')}
+    await open(Contact,{contactId:'Same Name'})
+    expect(element.textContent).toContain('Discovery failed')
+    expect(element.textContent).toContain('Deals')
+    fixture.discovery=null
+    const retry=[...element.querySelectorAll('button')].find(button=>button.textContent==='Retry')
+    retry.click();await settle()
+    expect(element.textContent).not.toContain('Discovery failed')
+    expect(element.querySelector('section[data-crm-panel]')).not.toBeNull()
+  })
+  it('shows renderer loading and ignores late old-record factories',async()=>{
+    const pending=[]
+    let created=0
+    fixture.rendererLoad=()=>new Promise(resolve=>pending.push(resolve))
+    const record=reactive({doc:{doctype:'Contact',name:'Same Name'}})
+    const Harness={setup(){const panels=useRecordPagePanels({record,scripts:{data:[]},nativeTabs:[{name:'native:Details',label:'Details'}],context:{router:{}}});return ()=>h(RecordPagePanels,{groups:panels.groups.value})}}
+    await open(Harness,{})
+    expect(element.textContent).toContain('Loading panel')
+    record.doc={doctype:'CRM Organization',name:'Same Name'};await settle()
+    const factory=runtime=>({props:['context'],setup(props){created++;return ()=>runtime.h('p',props.context.doctype)}})
+    pending[1](factory);await settle()
+    pending[0](factory);await settle()
+    expect(created).toBe(1)
+    expect(element.textContent).toContain('CRM Organization')
+    expect(element.textContent).not.toContain('Contact')
+  })
+  it('suppresses delayed old typed-record discovery and disposes on unmount',async()=>{
+    const record=reactive({doc:{doctype:'Contact',name:'Same Name'},reload(){}})
+    const pending=[]
+    fixture.discovery=context=>new Promise(resolve=>pending.push({context,resolve}))
+    const Harness={setup(){const panels=useRecordPagePanels({record,scripts:{data:[]},nativeTabs:[{name:'native:Details',label:'Details'}],context:{router:{}}});return ()=>h(RecordPagePanels,{groups:panels.groups.value})}}
+    await open(Harness,{})
+    record.doc={doctype:'CRM Organization',name:'Same Name'};await settle()
+    pending[1].resolve({context:pending[1].context,contributions:[appPanel('current')],diagnostics:[]});await settle()
+    pending[0].resolve({context:pending[0].context,contributions:[appPanel('stale')],diagnostics:[]});await settle()
+    expect(element.querySelector('section[data-crm-panel]').dataset.crmPanel).toBe('current:summary')
+    record.doc={doctype:'Contact',name:'Other'};await settle()
+    app.unmount();app=null
+    pending[2].resolve({context:pending[2].context,contributions:[appPanel('late')],diagnostics:[]});await settle()
+    expect(element.querySelector('section')).toBeNull()
+  })
+})
 
 // Native rendering remains unchanged; the application owns authorised typed reads.
 describe('native relationship activity resource', () => {
@@ -293,7 +384,6 @@ describe('shared Form Script compatibility', () => {
       expect(result.statuses.map(status=>status.label)).toEqual(['First status','Other status'])
       result.actions[0].onClick()
       expect(router.push).toHaveBeenCalledWith({name:routeName,params:{[param]:'Sales record'}})
-      expect(result.relationshipActivity).toBeNull()
     })
   }
   it('keeps independent header actions available when an optional activity contribution is invalid', async () => {
@@ -303,8 +393,6 @@ describe('shared Form Script compatibility', () => {
     ],{doc:{doctype:'CRM Organization',name:'Organisation'}})
     expect(result.actions.map(action=>action.label)).toEqual(['Existing action'])
     expect(result.statuses.map(status=>status.label)).toEqual(['Existing status'])
-    expect(result.relationshipActivity).toBeNull()
-    expect(result.relationshipActivityError).toContain('Invalid relationship activity contribution')
   })
 })
 

@@ -99,6 +99,7 @@
       </template>
     </FileUploader>
     <Tabs
+      :class="{ 'record-panels-selected': panelSelected }"
       v-model="tabIndex"
       as="div"
       :tabs="tabs"
@@ -106,11 +107,12 @@
     >
       <template #tab-item="{ tab, selected }">
         <button
-          v-if="tab.name !== 'Details'"
+          v-if="tab.name !== 'native:Details'"
           class="group flex items-center gap-2 border-b border-transparent py-2.5 text-base text-ink-gray-5 duration-300 ease-in-out hover:text-ink-gray-9 !px-4"
           :class="{ 'text-ink-gray-9': selected }"
         >
-          <component :is="tab.icon" v-if="tab.icon" class="h-5" />
+          <span v-if="typeof tab.icon === 'string'" :class="tab.icon" class="h-5 w-5" />
+          <component :is="tab.icon" v-else-if="tab.icon" class="h-5" />
           {{ __(tab.label) }}
           <Badge
             v-if="tab.count !== undefined"
@@ -124,7 +126,7 @@
           </Badge>
         </button>
         <button
-          v-else-if="relationshipActivity"
+          v-else-if="recordPanels.length"
           :aria-label="__('Record information')"
           :title="__('Record information')"
           class="py-2.5 text-ink-gray-5"
@@ -133,18 +135,7 @@
         </button>
       </template>
       <template #tab-panel="{ tab }">
-        <component
-          v-if="isActivityTab(tab)"
-          :is="relationshipActivity.component"
-          :key="'Contact:' + props.contactId"
-          doctype="Contact"
-          :docname="props.contactId"
-          :doc="contact.doc"
-          :method="tab.name"
-          :tabs="relationshipActivity.tabs"
-          :changeTab="changeActivityTab"
-        />
-        <div v-if="tab.name == 'Details'">
+        <div v-if="tab.name == 'native:Details'">
           <div
             v-if="sections.data"
             class="flex flex-1 flex-col justify-between overflow-hidden"
@@ -158,14 +149,14 @@
           </div>
         </div>
         <DealsListView
-          v-else-if="tab.label === 'Deals' && rows.length"
+          v-else-if="tab.name === 'native:Deals' && rows.length"
           class="mt-4"
           :rows="rows"
           :columns="columns"
           :options="{ selectable: false, showTooltip: false }"
         />
         <div
-          v-if="tab.label === 'Deals' && !rows.length"
+          v-if="tab.name === 'native:Deals' && !rows.length"
           class="grid flex-1 place-items-center text-2xl-medium text-ink-gray-4"
         >
           <div class="flex flex-col items-center justify-center space-y-3">
@@ -175,7 +166,13 @@
         </div>
       </template>
     </Tabs>
-    <ErrorMessage v-if="relationshipActivityError" :message="relationshipActivityError" />
+    <RecordPagePanels :groups="recordPanels" @retry="retryPanels" />
+    <p v-if="recordPanelsLoading && !recordPanels.length" role="status">{{ __('Loading panels...') }}</p>
+    <div v-if="recordPanelsError">
+      <ErrorMessage :message="recordPanelsError" />
+      <Button :label="__('Retry')" @click="retryPanels" />
+    </div>
+    <p v-for="(diagnostic, index) in recordPanelDiagnostics" :key="index" role="status">{{ diagnostic.message }}</p>
   </div>
 </template>
 
@@ -193,7 +190,8 @@ import { useContactFields } from '@/composables/useContactFields'
 import { timestampCell } from '@/composables/useTimelinePreferences'
 import { getView } from '@/utils/view'
 import { useDocument } from '@/data/document'
-import { useRelationshipActivity } from '@/composables/useRelationshipActivity'
+import { useRecordPagePanels } from '@/composables/useRecordPagePanels'
+import RecordPagePanels from '@/components/RecordPagePanels.vue'
 import { getSettings } from '@/stores/settings'
 import { getMeta } from '@/stores/meta'
 import { globalStore } from '@/stores/global.js'
@@ -322,12 +320,12 @@ async function deleteContact() {
 
 const nativeTabs = [
   {
-    name: 'Details',
+    name: 'native:Details',
     label: __('Details'),
     icon: DetailsIcon,
   },
   {
-    name: 'Deals',
+    name: 'native:Deals',
     label: __('Deals'),
     icon: h(DealsIcon, { class: 'h-4 w-4' }),
     count: computed(() => deals.data?.length),
@@ -335,13 +333,15 @@ const nativeTabs = [
 ]
 
 const {
-  activity: relationshipActivity,
-  error: relationshipActivityError,
+  groups: recordPanels,
+  error: recordPanelsError,
+  diagnostics: recordPanelDiagnostics,
+  loading: recordPanelsLoading,
   tabs,
   tabIndex,
-  changeTab: changeActivityTab,
-  isActivityTab,
-} = useRelationshipActivity({
+  panelSelected,
+  retry: retryPanels,
+} = useRecordPagePanels({
   record: contact,
   scripts,
   nativeTabs,
@@ -472,3 +472,8 @@ function showAddressModal(_address) {
   })
 }
 </script>
+
+<style scoped>
+.record-panels-selected { flex: 0 0 auto; }
+.record-panels-selected :deep([role='tabpanel']) { display: none !important; }
+</style>
