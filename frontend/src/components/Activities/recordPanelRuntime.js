@@ -1,5 +1,6 @@
 import { h, ref, computed, watch, onMounted, onUnmounted, defineAsyncComponent } from 'vue'
-import { Button, ErrorMessage, TextEditor, createResource, call, toast } from 'frappe-ui'
+import { Button, ErrorMessage, TextEditor, createResource, call, toast, useFileUpload } from 'frappe-ui'
+import { renderFieldLayoutDialog } from '@/utils/renderFieldLayoutDialog'
 import { useDoctypeModal } from '@/composables/doctypeModal'
 
 // Components use the hosting CRM runtime; consumers must not bundle another Vue.
@@ -18,5 +19,5 @@ const native = {
 
 export function useRecordPanelRuntime(router) {
   const { showModal } = useDoctypeModal()
-  return { version: 1, h, ref, computed, watch, onMounted, onUnmounted, createResource, call, toast, router, showModal, native, vue: Object.freeze({ h, ref, computed, watch, onMounted, onUnmounted }), translate: window.__, __: window.__ }
+  return { version: 1, h, ref, computed, watch, onMounted, onUnmounted, createResource, call, toast, useFileUpload, formDialog: renderFieldLayoutDialog, router, showModal, native, vue: Object.freeze({ h, ref, computed, watch, onMounted, onUnmounted }), translate: window.__, __: window.__ }
 }

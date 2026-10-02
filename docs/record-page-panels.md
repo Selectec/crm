@@ -79,7 +79,10 @@ and is not a sandbox.
 
 `runtime.version = 1` exposes CRM's own `vue: {h, ref, computed, watch, onMounted,
 onUnmounted}`, plus those helpers as top-level aliases; `createResource`, `call`,
-`toast`, `router`, `showModal`, `translate` and `__`. `native` contains `Button`,
+`toast`, `router`, `showModal`, `formDialog`, `useFileUpload`, `translate` and `__`.
+`formDialog` opens the existing transient FieldLayout dialog; `useFileUpload` is
+Frappe UI’s native uploader, including private storage, progress, cancellation
+and custom multipart `params`. Neither helper changes source permissions. `native` contains `Button`,
 `ErrorMessage`, `TextEditor`, `Activities`, `NoteArea`, `TaskArea`, `CallArea`,
 `EmailEditor`, `CommentBox`, `AttachmentArea`. Apps must use these supplied runtimes
 and render functions rather than bundle a second Vue, Frappe UI or router. Native
