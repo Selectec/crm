@@ -57,6 +57,10 @@ vi.mock('frappe-ui', async (original) => {
   const actual = await original()
   const { reactive } = await import('vue')
   return { ...actual, call: async (method, context) => {
+    if (method.startsWith('crm.integrations.api.add_')) {
+      fixture.callMutations?.push({method,context})
+      return context.note || context.task
+    }
     if (method === 'test.editor.pause') return fixture.controllerPause
     if (method === 'test.editor.rights') return fixture.controllerRights
     if (method === 'crm.api.record_page.get_panels') {
@@ -84,7 +88,7 @@ vi.mock('frappe-ui', async (original) => {
       if (options.url === 'crm.fcrm.doctype.crm_call_log.crm_call_log.get_call_log') data = fixture.callLog
       if (options.url.includes('get_sidepanel_sections')) data = []
       if (options.url.includes('get_fields_layout')) data = [{name:'main',label:'',sections:[{name:'note',label:'',columns:[{name:'one',fields:[{fieldname:'title',fieldtype:'Data',label:'Title',visible:true},{fieldname:'content',fieldtype:'Text Editor',label:'Content',visible:true}]}]}]}]
-      return reactive({data, reload() {}, submit: async (params) => {
+      return reactive({data, reload() { if(options.url === 'crm.fcrm.doctype.crm_call_log.crm_call_log.get_call_log') fixture.callReload?.() }, submit: async (params) => {
         if (options.url === 'frappe.client.save') {
           fixture.nativeSaves.push(JSON.parse(JSON.stringify(params)))
           if (fixture.saveResult) options.onSuccess?.(fixture.saveResult)
@@ -119,7 +123,13 @@ vi.mock('@/utils/view', () => ({ getView: () => null }))
 vi.mock('@/composables/whatsapp', async () => ({whatsappEnabled:(await import('vue')).ref(false)}))
 vi.mock('@/composables/telephony', () => ({callEnabled:{value:false}}))
 vi.mock('@/composables/useContactFields', () => ({useContactFields:()=>section=>section}))
-vi.mock('frappe-ui/frappe', () => ({useTelemetry:()=>({capture(){}}),useOnboarding:()=>({updateOnboardingStep(){}})}))
+vi.mock('frappe-ui/frappe', () => ({useTelemetry:()=>({capture(){}}),useOnboarding:()=>({
+  totalSteps:{get value(){return fixture.onboardingCount ?? 8}},
+  updateOnboardingStep(step){
+    if(fixture.onboardingCount === 0) throw new TypeError('Onboarding UI has no initialized steps')
+    fixture.onboardingUpdates?.push(step)
+  },
+})}))
 vi.mock('@/components/SidePanelLayout.vue', () => ({default:{render:()=>h('aside','Record information')}}))
 vi.mock('@/components/Resizer.vue', () => ({default:{render(){return h('div',this.$slots.default?.())}}}))
 vi.mock('@/components/LayoutHeader.vue', () => ({default:{render(){return h('header',[this.$slots['left-header']?.(),this.$slots['right-header']?.()])}}}))
@@ -743,6 +753,30 @@ describe('native source permission capabilities', () => {
     action.click()
     await settle()
   }
+  it.each([['Note',0],['Task',0],['Note',8],['Task',8]])('completes native Call %s creation callbacks with %s initialized onboarding steps',async(type,count)=>{
+    fixture.onboardingCount=count
+    fixture.onboardingUpdates=[]
+    fixture.callMutations=[]
+    fixture.callReload=vi.fn()
+    try {
+      await openCall({reference_doctype:'Other Record',reference_docname:'Recorded source'})
+      await callAction(`Add ${type}`)
+      fixture.callReload.mockClear()
+      useDoctypeModal().triggerCallback('afterInsert',{name:'New source'})
+      await settle()
+      expect(fixture.callMutations).toEqual([{
+        method:`crm.integrations.api.add_${type.toLowerCase()}_to_call_log`,
+        context:{call_sid:'Native Call',[type.toLowerCase()]:{name:'New source'}},
+      }])
+      expect(fixture.callReload).toHaveBeenCalled()
+      expect(fixture.onboardingUpdates).toEqual(count ? [`create_first_${type.toLowerCase()}`] : [])
+    } finally {
+      fixture.onboardingCount=undefined
+      fixture.callMutations=null
+      fixture.callReload=null
+      fixture.onboardingUpdates=null
+    }
+  })
   it('passes caller creation defaults through the native Call card to Note and Task editors without changing existing sources', async () => {
     const defaults={reference_doctype:'Other Record',reference_docname:'Source/with spaces',custom_context:'opaque',status:'Todo',priority:'High'}
     await openCall(defaults)

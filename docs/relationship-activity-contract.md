@@ -137,3 +137,8 @@ controller callbacks, paused native controllers, attachment cleanup, failed read
 controller opt-in and the next stock editor launch. Actual
 two-editor persistence/conflict acceptance must run against the built CRM and
 contributing app on the isolated test site.
+
+Call Details creation callbacks reload the native Call after linking the new source.
+They update onboarding only when its native UI has initialized steps; standalone
+mobile or contributed hosts do not need an onboarding instance to complete the
+source lifecycle. The normal initialized onboarding update remains unchanged.
