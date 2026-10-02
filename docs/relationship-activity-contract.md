@@ -48,6 +48,14 @@ capability to hide unavailable controls. Deletion still uses native
 `frappe.client.delete` and reloads its model resource; server permissions and
 lifecycle hooks remain authoritative.
 
+`native.TaskArea` accepts optional `canDelete` and `canUpdateStatus` Booleans,
+both defaulting to true for existing callers. They independently hide the native
+delete or status controls; opening the complete Task still uses
+`modalRef.showTask(task)`. Available status controls keep the existing
+`modalRef.updateTaskStatus(status, task)` workflow. A panel can supply the source's
+capabilities when rendering its card; CRM does not decide content authorship or
+assignment permissions. Native backend permissions remain authoritative.
+
 `native.AttachmentArea` accepts optional `canDelete` and `canTogglePrivacy`
 Booleans, both defaulting to true for existing callers. A contributing app passes
 its source capabilities to hide unavailable controls; native delete and privacy

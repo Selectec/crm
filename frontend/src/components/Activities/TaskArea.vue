@@ -38,6 +38,7 @@
         </div>
         <div class="flex items-center gap-1">
           <Dropdown
+            v-if="canUpdateStatus"
             :options="taskStatusOptions(modalRef.updateTaskStatus, task)"
           >
             <Button
@@ -50,6 +51,7 @@
             </Button>
           </Dropdown>
           <Dropdown
+            v-if="canDelete"
             :options="[
               {
                 label: __('Delete'),
@@ -104,6 +106,8 @@ import { Tooltip, Dropdown } from 'frappe-ui'
 defineProps({
   tasks: { type: Array, default: () => [] },
   modalRef: { type: Object, default: () => ({}) },
+  canDelete: { type: Boolean, default: true },
+  canUpdateStatus: { type: Boolean, default: true },
 })
 
 const { getUser } = usersStore()
