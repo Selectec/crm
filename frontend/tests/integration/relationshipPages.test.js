@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createApp, h, reactive, nextTick } from 'vue'
+import { createApp, h, reactive, nextTick, toRaw } from 'vue'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import { Button, Dialog, ErrorMessage, Badge, FormControl, TextInput, FeatherIcon } from 'frappe-ui'
 import Organization from '@/pages/Organization.vue'
@@ -744,7 +744,7 @@ describe('native source permission capabilities', () => {
     expect(modal.doctype.value).toBe('FCRM Note')
     expect(modal.name.value).toBeNull()
     expect(modal.defaults.value).toEqual(defaults)
-    expect(modal.defaults.value).not.toBe(defaults)
+    expect(toRaw(modal.defaults.value)).not.toBe(defaults)
     modal.show.value=false
     await settle()
     await callAction('Add Task')
@@ -753,7 +753,7 @@ describe('native source permission capabilities', () => {
     modal.show.value=false
     await settle()
     fixture.callLog._notes=[{name:'Existing Note',title:'Existing note content'}]
-    fixture.documents.set('FCRM Note:Existing Note',reactive({doc:{doctype:'FCRM Note',name:'Existing Note',title:'Existing note content'},actions:[],fieldPropertyOverrides:{}}))
+    fixture.documents.set('FCRM Note:Existing Note',reactive({doc:{doctype:'FCRM Note',name:'Existing Note',title:'Existing note content'},save:{submit:vi.fn()},actions:[],fieldPropertyOverrides:{}}))
     await settle()
     await callAction('Edit Note')
     expect(modal.name.value).toBe('Existing Note')
