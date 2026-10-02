@@ -1,7 +1,7 @@
 # Relationship activity page contributions
 
 This versioned frontend contract allows an installed application to contribute
-activity methods on existing Organization and Contact pages. It does not change
+activity methods on existing desktop and mobile Organization and Contact pages. It does not change
 native activity storage or grant access to any record. The application must use
 authorised, typed backend operations and native source records.
 
@@ -59,7 +59,7 @@ registered through the existing CRM mechanism.
 
 ## Verification boundary
 
-`tests/integration/relationshipPages.test.js` mounts the actual Organization and
+`tests/integration/relationshipPages.test.js` mounts the actual desktop and mobile Organization and
 Contact page templates, native frappe-ui Tabs, production setupCustomizations
 engine and native DoctypeModals/DoctypeModal/FieldLayout. It checks one row,
 initial Activity, retained related tabs, pointer/keyboard Notes selection and
@@ -82,6 +82,9 @@ CRM page files: only use it while those files are the unchanged upstream pin.
 On 2 October 2026 the WSL implementation coordinator ran the container checks
 against CRM 1.81.2 (`49d98d61`). Untouched desktop pages failed the two requested
 method-tab journeys and passed the existing-layout journey; the changed pages
-passed all three. The versioned-contribution unit check also passed. Mobile
-native routes and the typed Activities resource/action adapter remain subsequent
-steps; these desktop checks are a bounded embedding proof, not #190 acceptance.
+passed all three. The unchanged mobile routes separately failed the two missing-
+method journeys; after adding the same host seam, all five desktop/mobile journeys
+passed, including the retained native mobile information pane. The versioned-
+contribution unit check also passed. A shared composable owns registration for
+all four hosts. The typed Activities resource/action adapter remains a subsequent
+step; these checks are a bounded embedding proof, not #190 acceptance.

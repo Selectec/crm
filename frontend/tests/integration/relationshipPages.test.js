@@ -4,6 +4,8 @@ import { createRouter, createMemoryHistory } from 'vue-router'
 import { Button, Dialog, ErrorMessage, Badge, FormControl } from 'frappe-ui'
 import Organization from '@/pages/Organization.vue'
 import Contact from '@/pages/Contact.vue'
+import MobileOrganization from '@/pages/MobileOrganization.vue'
+import MobileContact from '@/pages/MobileContact.vue'
 import translationPlugin from '@/translation'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
 import DeleteLinkedDocModal from '@/components/DeleteLinkedDocModal.vue'
@@ -89,14 +91,16 @@ describe('existing native relationship pages',()=>{
   for(const [label,Page,props,context,related] of [
     ['Organization',Organization,{organizationId:'Same Name'},'CRM Organization',['Deals','Contacts']],
     ['Contact',Contact,{contactId:'Same Name'},'Contact',['Deals']],
+    ['Mobile Organization',MobileOrganization,{organizationId:'Same Name'},'CRM Organization',['Record information','Deals','Contacts']],
+    ['Mobile Contact',MobileContact,{contactId:'Same Name'},'Contact',['Record information','Deals']],
   ]) it(`${label} embeds contributed methods in its native tab row and opens the native note editor`,async()=>{
     fixture.enabled=true
     await open(Page,props)
     const tabs=[...element.querySelectorAll('[role="tab"]')]
-    expect(tabs.map(tab=>tab.textContent.trim().replace(/\s*\d+$/, ''))).toEqual(['Activity','Notes',...related])
+    expect(tabs.map(tab=>tab.getAttribute('aria-label') || tab.textContent.trim().replace(/\s*\d+$/, ''))).toEqual(['Activity','Notes',...related])
     expect(element.querySelectorAll('[role="tablist"]')).toHaveLength(1)
     expect(tabs[0].getAttribute('aria-selected')).toBe('true')
-    expect(element.textContent).toContain('Record information')
+    if (!label.startsWith('Mobile')) expect(element.textContent).toContain('Record information')
     // Native Reka Tabs activates on mousedown or Enter/Space, not synthetic click.
     tabs[1].dispatchEvent(label === 'Organization'
       ? new MouseEvent('mousedown', {button:0,ctrlKey:false,bubbles:true})
@@ -109,6 +113,12 @@ describe('existing native relationship pages',()=>{
     expect(document.body.textContent).toContain('Create Note')
     expect(document.body.textContent).toContain('Title')
     expect(useDoctypeModal().defaults.value).toEqual({reference_doctype:context,reference_docname:'Same Name'})
+    if (label.startsWith('Mobile')) {
+      useDoctypeModal().show.value = false
+      tabs[2].dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}))
+      await settle()
+      expect(element.textContent).toContain('Record information')
+    }
   })
   it('keeps the existing tab layout when no activity contribution is installed',async()=>{
     fixture.enabled=false;await open(Organization,{organizationId:'Unmanaged'})

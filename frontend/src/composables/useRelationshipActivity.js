@@ -1,0 +1,48 @@
+import { computed, markRaw, ref, watch } from 'vue'
+import { setupCustomizations } from '@/utils'
+import { useRelationshipUI } from '@/components/Activities/relationshipUI'
+
+/** Compose one app-owned activity area with a native relationship page. */
+export function useRelationshipActivity({ record, scripts, nativeTabs, context }) {
+  const activity = ref(null)
+  const error = ref('')
+  const tabIndex = ref(0)
+  const relationshipUI = useRelationshipUI(context.router)
+  const tabs = computed(() => [...(activity.value?.tabs || []), ...nativeTabs])
+  const isActivityTab = (tab) => Boolean(activity.value?.tabs.some((method) => method.name === tab.name))
+
+  function changeTab(name) {
+    const index = tabs.value.findIndex((tab) => tab.name === name)
+    if (index >= 0) tabIndex.value = index
+  }
+
+  let generation = 0
+  watch(
+    [() => record.doc, () => scripts.data],
+    async ([doc, registrations]) => {
+      if (!doc || !registrations) return
+      const current = ++generation
+      try {
+        const customization = await setupCustomizations(registrations, {
+          ...context,
+          doc,
+          relationshipUI,
+        })
+        if (current !== generation) return
+        record._actions = customization.actions || []
+        const initial = !activity.value
+        activity.value = customization.relationshipActivity
+          ? markRaw(customization.relationshipActivity)
+          : null
+        error.value = ''
+        if (initial && activity.value) changeTab(activity.value.initialTab)
+      } catch (failure) {
+        if (current === generation) {
+          error.value = failure.message || __('Could not load relationship activity.')
+        }
+      }
+    },
+    { immediate: true },
+  )
+  return { activity, error, tabs, tabIndex, changeTab, isActivityTab }
+}

@@ -146,7 +146,7 @@
       </template>
       <template #tab-panel="{ tab }">
         <component
-          v-if="relationshipActivity && relationshipActivity.tabs.some((method) => method.name === tab.name)"
+          v-if="isActivityTab(tab)"
           :is="relationshipActivity.component"
           :key="'Contact:' + props.contactId"
           doctype="Contact"
@@ -184,7 +184,7 @@
 
 <script setup>
 import ErrorPage from '@/components/ErrorPage.vue'
-import { useRelationshipUI } from '@/components/Activities/relationshipUI'
+import { useRelationshipActivity } from '@/composables/useRelationshipActivity'
 import Resizer from '@/components/Resizer.vue'
 import Icon from '@/components/Icon.vue'
 import SidePanelLayout from '@/components/SidePanelLayout.vue'
@@ -194,7 +194,7 @@ import CameraIcon from '@/components/Icons/CameraIcon.vue'
 import DealsIcon from '@/components/Icons/DealsIcon.vue'
 import DealsListView from '@/components/ListViews/DealsListView.vue'
 import CustomActions from '@/components/CustomActions.vue'
-import { validateIsImageFile, setupCustomizations } from '@/utils'
+import { validateIsImageFile } from '@/utils'
 import { useContactFields } from '@/composables/useContactFields'
 import { timestampCell } from '@/composables/useTimelinePreferences'
 import { getView } from '@/utils/view'
@@ -219,7 +219,7 @@ import {
 } from 'frappe-ui'
 import { useDoctypeModal } from '@/composables/doctypeModal'
 import { useTelemetry } from 'frappe-ui/frappe'
-import { ref, computed, watch, onMounted, markRaw } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
 
@@ -312,20 +312,6 @@ function changeContactImage(file) {
   })
 }
 
-const relationshipActivity = ref(null)
-const relationshipActivityError = ref('')
-const relationshipUI = useRelationshipUI(router)
-const tabs = computed(() => [
-  ...(relationshipActivity.value?.tabs || []),
-  ...nativeTabs,
-])
-
-function changeActivityTab(name) {
-  const index = tabs.value.findIndex((tab) => tab.name === name)
-  if (index >= 0) tabIndex.value = index
-}
-
-const tabIndex = ref(0)
 const nativeTabs = [
   {
     label: 'Deals',
@@ -333,6 +319,30 @@ const nativeTabs = [
     count: computed(() => deals.data?.length),
   },
 ]
+
+const {
+  activity: relationshipActivity,
+  error: relationshipActivityError,
+  tabs,
+  tabIndex,
+  changeTab: changeActivityTab,
+  isActivityTab,
+} = useRelationshipActivity({
+  record: contact,
+  scripts,
+  nativeTabs,
+  context: {
+    $dialog,
+    $socket,
+    router,
+    toast,
+    call,
+    updateField: contact.setValue.submit,
+    createToast: toast.create,
+    deleteDoc: deleteContact,
+  },
+})
+
 
 const deals = createResource({
   url: 'crm.api.contact.get_linked_deals',
@@ -461,42 +471,4 @@ function showAddressModal(_address) {
   })
 }
 
-// Compose managed activity content alongside existing native custom actions.
-let customizationGeneration = 0
-watch(
-  [() => contact.doc, () => scripts.data],
-  async ([_doc, _scripts]) => {
-    if (!_doc || !_scripts) return
-    const generation = ++customizationGeneration
-    try {
-      const customization = await setupCustomizations(_scripts, {
-        doc: _doc,
-        $dialog,
-        $socket,
-        router,
-        toast,
-        updateField: contact.setValue.submit,
-        createToast: toast.create,
-        deleteDoc: deleteContact,
-        call,
-        relationshipUI,
-      })
-      if (generation !== customizationGeneration) return
-      contact._actions = customization.actions || []
-      const initial = !relationshipActivity.value
-      relationshipActivity.value = customization.relationshipActivity
-        ? markRaw(customization.relationshipActivity)
-        : null
-      relationshipActivityError.value = ''
-      if (initial && relationshipActivity.value) {
-        changeActivityTab(relationshipActivity.value.initialTab)
-      }
-    } catch (error) {
-      if (generation === customizationGeneration) {
-        relationshipActivityError.value = error.message || __('Could not load relationship activity.')
-      }
-    }
-  },
-  { immediate: true },
-)
 </script>

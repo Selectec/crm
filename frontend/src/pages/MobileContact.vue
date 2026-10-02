@@ -106,13 +106,14 @@
     >
       <template #tab-item="{ tab, selected }">
         <button
-          v-if="tab.name == 'Deals'"
+          v-if="tab.name !== 'Details'"
           class="group flex items-center gap-2 border-b border-transparent py-2.5 text-base text-ink-gray-5 duration-300 ease-in-out hover:text-ink-gray-9 !px-4"
           :class="{ 'text-ink-gray-9': selected }"
         >
           <component :is="tab.icon" v-if="tab.icon" class="h-5" />
           {{ __(tab.label) }}
           <Badge
+            v-if="tab.count !== undefined"
             class="group-hover:bg-surface-gray-10"
             :class="[selected ? 'bg-surface-gray-10' : 'bg-gray-600']"
             variant="solid"
@@ -122,8 +123,27 @@
             {{ tab.count }}
           </Badge>
         </button>
+        <button
+          v-else-if="relationshipActivity"
+          :aria-label="__('Record information')"
+          :title="__('Record information')"
+          class="py-2.5 text-ink-gray-5"
+        >
+          <DetailsIcon class="h-5 w-5" />
+        </button>
       </template>
       <template #tab-panel="{ tab }">
+        <component
+          v-if="isActivityTab(tab)"
+          :is="relationshipActivity.component"
+          :key="'Contact:' + props.contactId"
+          doctype="Contact"
+          :docname="props.contactId"
+          :doc="contact.doc"
+          :method="tab.name"
+          :tabs="relationshipActivity.tabs"
+          :changeTab="changeActivityTab"
+        />
         <div v-if="tab.name == 'Details'">
           <div
             v-if="sections.data"
@@ -155,6 +175,7 @@
         </div>
       </template>
     </Tabs>
+    <ErrorMessage v-if="relationshipActivityError" :message="relationshipActivityError" />
   </div>
 </template>
 
@@ -172,6 +193,7 @@ import { useContactFields } from '@/composables/useContactFields'
 import { timestampCell } from '@/composables/useTimelinePreferences'
 import { getView } from '@/utils/view'
 import { useDocument } from '@/data/document'
+import { useRelationshipActivity } from '@/composables/useRelationshipActivity'
 import { getSettings } from '@/stores/settings'
 import { getMeta } from '@/stores/meta'
 import { globalStore } from '@/stores/global.js'
@@ -196,7 +218,7 @@ import { ref, computed, h, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 const { brand } = getSettings()
-const { $dialog, makeCall } = globalStore()
+const { $dialog, $socket, makeCall } = globalStore()
 
 const { getUser } = usersStore()
 const { getOrganization } = organizationsStore()
@@ -214,6 +236,7 @@ const router = useRouter()
 const {
   document: contact,
   permissions,
+  scripts,
   triggerOnRender,
 } = useDocument('Contact', props.contactId)
 
@@ -297,8 +320,7 @@ async function deleteContact() {
   })
 }
 
-const tabIndex = ref(0)
-const tabs = [
+const nativeTabs = [
   {
     name: 'Details',
     label: __('Details'),
@@ -311,6 +333,30 @@ const tabs = [
     count: computed(() => deals.data?.length),
   },
 ]
+
+const {
+  activity: relationshipActivity,
+  error: relationshipActivityError,
+  tabs,
+  tabIndex,
+  changeTab: changeActivityTab,
+  isActivityTab,
+} = useRelationshipActivity({
+  record: contact,
+  scripts,
+  nativeTabs,
+  context: {
+    $dialog,
+    $socket,
+    router,
+    toast,
+    call,
+    updateField: contact.setValue.submit,
+    createToast: toast.create,
+    deleteDoc: deleteContact,
+  },
+})
+
 
 const deals = createResource({
   url: 'crm.api.contact.get_linked_deals',

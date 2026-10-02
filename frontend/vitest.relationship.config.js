@@ -22,6 +22,8 @@ export default defineConfig({
       ...(process.env.RELATIONSHIP_BASELINE ? {
         '@/pages/Organization.vue': path.join(benchApps, 'crm/frontend/src/pages/Organization.vue'),
         '@/pages/Contact.vue': path.join(benchApps, 'crm/frontend/src/pages/Contact.vue'),
+        '@/pages/MobileOrganization.vue': path.join(benchApps, 'crm/frontend/src/pages/MobileOrganization.vue'),
+        '@/pages/MobileContact.vue': path.join(benchApps, 'crm/frontend/src/pages/MobileContact.vue'),
       } : {}),
       '@': path.resolve(__dirname, 'src'),
       '@framework/ui': path.join(benchApps, 'frappe/ui/src'),

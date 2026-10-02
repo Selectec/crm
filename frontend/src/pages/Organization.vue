@@ -143,7 +143,7 @@
       </template>
       <template #tab-panel="{ tab }">
         <component
-          v-if="relationshipActivity && relationshipActivity.tabs.some((method) => method.name === tab.name)"
+          v-if="isActivityTab(tab)"
           :is="relationshipActivity.component"
           :key="'CRM Organization:' + props.organizationId"
           doctype="CRM Organization"
@@ -192,7 +192,7 @@
 
 <script setup>
 import ErrorPage from '@/components/ErrorPage.vue'
-import { useRelationshipUI } from '@/components/Activities/relationshipUI'
+import { useRelationshipActivity } from '@/composables/useRelationshipActivity'
 import Resizer from '@/components/Resizer.vue'
 import SidePanelLayout from '@/components/SidePanelLayout.vue'
 import Icon from '@/components/Icon.vue'
@@ -214,7 +214,6 @@ import { statusesStore } from '@/stores/statuses'
 import { getView } from '@/utils/view'
 import {
   validateIsImageFile,
-  setupCustomizations,
   openWebsite as openExternalWebsite,
 } from '@/utils'
 import { timestampCell } from '@/composables/useTimelinePreferences'
@@ -232,7 +231,7 @@ import {
 } from 'frappe-ui'
 import { useDoctypeModal } from '@/composables/doctypeModal'
 import { useTelemetry } from 'frappe-ui/frappe'
-import { computed, ref, watch, onMounted, markRaw } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 const props = defineProps({
@@ -383,20 +382,6 @@ function getParsedSections(_sections) {
   })
 }
 
-const relationshipActivity = ref(null)
-const relationshipActivityError = ref('')
-const relationshipUI = useRelationshipUI(router)
-const tabs = computed(() => [
-  ...(relationshipActivity.value?.tabs || []),
-  ...nativeTabs,
-])
-
-function changeActivityTab(name) {
-  const index = tabs.value.findIndex((tab) => tab.name === name)
-  if (index >= 0) tabIndex.value = index
-}
-
-const tabIndex = ref(0)
 const nativeTabs = [
   {
     label: 'Deals',
@@ -409,6 +394,30 @@ const nativeTabs = [
     count: computed(() => contacts.data?.length),
   },
 ]
+
+const {
+  activity: relationshipActivity,
+  error: relationshipActivityError,
+  tabs,
+  tabIndex,
+  changeTab: changeActivityTab,
+  isActivityTab,
+} = useRelationshipActivity({
+  record: organization,
+  scripts,
+  nativeTabs,
+  context: {
+    $dialog,
+    $socket,
+    router,
+    toast,
+    call,
+    updateField: organization.setValue.submit,
+    createToast: toast.create,
+    deleteDoc: deleteOrganization,
+  },
+})
+
 
 const deals = createListResource({
   type: 'list',
@@ -455,19 +464,20 @@ const contacts = createListResource({
 })
 
 const rows = computed(() => {
-  let list = !tabIndex.value ? deals : contacts
+  const isDeals = tabs.value[tabIndex.value]?.label === 'Deals'
+  let list = isDeals ? deals : contacts
 
   if (!list.data) return []
 
   return list.data.map((row) => {
-    return !tabIndex.value ? getDealRowObject(row) : getContactRowObject(row)
+    return isDeals ? getDealRowObject(row) : getContactRowObject(row)
   })
 })
 
 const { getFormattedCurrency } = getMeta('CRM Deal')
 
 const columns = computed(() => {
-  return tabIndex.value === 0 ? dealColumns : contactColumns
+  return tabs.value[tabIndex.value]?.label === 'Deals' ? dealColumns : contactColumns
 })
 
 function getDealRowObject(deal) {
@@ -593,42 +603,4 @@ function showAddressModal(_address) {
   })
 }
 
-// Compose managed activity content alongside existing native custom actions.
-let customizationGeneration = 0
-watch(
-  [() => organization.doc, () => scripts.data],
-  async ([_doc, _scripts]) => {
-    if (!_doc || !_scripts) return
-    const generation = ++customizationGeneration
-    try {
-      const customization = await setupCustomizations(_scripts, {
-        doc: _doc,
-        $dialog,
-        $socket,
-        router,
-        toast,
-        updateField: organization.setValue.submit,
-        createToast: toast.create,
-        deleteDoc: deleteOrganization,
-        call,
-        relationshipUI,
-      })
-      if (generation !== customizationGeneration) return
-      organization._actions = customization.actions || []
-      const initial = !relationshipActivity.value
-      relationshipActivity.value = customization.relationshipActivity
-        ? markRaw(customization.relationshipActivity)
-        : null
-      relationshipActivityError.value = ''
-      if (initial && relationshipActivity.value) {
-        changeActivityTab(relationshipActivity.value.initialTab)
-      }
-    } catch (error) {
-      if (generation === customizationGeneration) {
-        relationshipActivityError.value = error.message || __('Could not load relationship activity.')
-      }
-    }
-  },
-  { immediate: true },
-)
 </script>

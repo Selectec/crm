@@ -98,6 +98,7 @@
           <component :is="tab.icon" v-if="tab.icon" class="h-5" />
           {{ __(tab.label) }}
           <Badge
+            v-if="tab.count !== undefined"
             class="group-hover:bg-surface-gray-10"
             :class="[selected ? 'bg-surface-gray-10' : 'bg-gray-600']"
             variant="solid"
@@ -107,8 +108,27 @@
             {{ tab.count }}
           </Badge>
         </button>
+        <button
+          v-else-if="relationshipActivity"
+          :aria-label="__('Record information')"
+          :title="__('Record information')"
+          class="py-2.5 text-ink-gray-5"
+        >
+          <DetailsIcon class="h-5 w-5" />
+        </button>
       </template>
       <template #tab-panel="{ tab }">
+        <component
+          v-if="isActivityTab(tab)"
+          :is="relationshipActivity.component"
+          :key="'CRM Organization:' + props.organizationId"
+          doctype="CRM Organization"
+          :docname="props.organizationId"
+          :doc="organization.doc"
+          :method="tab.name"
+          :tabs="relationshipActivity.tabs"
+          :changeTab="changeActivityTab"
+        />
         <div v-if="tab.name == 'Details'">
           <div
             v-if="sections.data"
@@ -137,7 +157,7 @@
           :options="{ selectable: false, showTooltip: false }"
         />
         <div
-          v-if="!rows.length && tab.name !== 'Details'"
+          v-if="!rows.length && ['Deals', 'Contacts'].includes(tab.name)"
           class="grid flex-1 place-items-center text-2xl-medium text-ink-gray-4"
         >
           <div class="flex flex-col items-center justify-center space-y-3">
@@ -147,6 +167,7 @@
         </div>
       </template>
     </Tabs>
+    <ErrorMessage v-if="relationshipActivityError" :message="relationshipActivityError" />
   </div>
 </template>
 
@@ -161,6 +182,7 @@ import CameraIcon from '@/components/Icons/CameraIcon.vue'
 import DealsIcon from '@/components/Icons/DealsIcon.vue'
 import ContactsIcon from '@/components/Icons/ContactsIcon.vue'
 import { useDocument } from '@/data/document'
+import { useRelationshipActivity } from '@/composables/useRelationshipActivity'
 import { getSettings } from '@/stores/settings'
 import { getMeta } from '@/stores/meta'
 import { globalStore } from '@/stores/global'
@@ -195,7 +217,7 @@ const props = defineProps({
 
 const { brand } = getSettings()
 const { getUser } = usersStore()
-const { $dialog } = globalStore()
+const { $dialog, $socket } = globalStore()
 const { getDealStatus } = statusesStore()
 const { doctypeMeta } = getMeta('CRM Organization')
 const { capture } = useTelemetry()
@@ -206,6 +228,7 @@ const router = useRouter()
 const {
   document: organization,
   permissions,
+  scripts,
   triggerOnRender,
 } = useDocument('CRM Organization', props.organizationId)
 
@@ -332,8 +355,7 @@ function getParsedSections(_sections) {
   })
 }
 
-const tabIndex = ref(0)
-const tabs = [
+const nativeTabs = [
   {
     name: 'Details',
     label: __('Details'),
@@ -352,6 +374,30 @@ const tabs = [
     count: computed(() => contacts.data?.length),
   },
 ]
+
+const {
+  activity: relationshipActivity,
+  error: relationshipActivityError,
+  tabs,
+  tabIndex,
+  changeTab: changeActivityTab,
+  isActivityTab,
+} = useRelationshipActivity({
+  record: organization,
+  scripts,
+  nativeTabs,
+  context: {
+    $dialog,
+    $socket,
+    router,
+    toast,
+    call,
+    updateField: organization.setValue.submit,
+    createToast: toast.create,
+    deleteDoc: deleteOrganization,
+  },
+})
+
 
 const deals = createListResource({
   type: 'list',
@@ -398,19 +444,20 @@ const contacts = createListResource({
 })
 
 const rows = computed(() => {
-  let list = !tabIndex.value ? deals : contacts
+  const isDeals = tabs.value[tabIndex.value]?.label === 'Deals'
+  let list = isDeals ? deals : contacts
 
   if (!list.data) return []
 
   return list.data.map((row) => {
-    return !tabIndex.value ? getDealRowObject(row) : getContactRowObject(row)
+    return isDeals ? getDealRowObject(row) : getContactRowObject(row)
   })
 })
 
 const { getFormattedCurrency } = getMeta('CRM Deal')
 
 const columns = computed(() => {
-  return tabIndex.value === 0 ? dealColumns : contactColumns
+  return tabs.value[tabIndex.value]?.label === 'Deals' ? dealColumns : contactColumns
 })
 
 function getDealRowObject(deal) {
