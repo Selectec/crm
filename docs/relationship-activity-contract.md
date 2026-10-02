@@ -14,7 +14,7 @@ Form Script actions/statuses and the native components below remain independent.
 
 The owning application may render `native.Activities` with its existing
 `doctype`, `docname`, `tabs` and `tabIndex` inputs and an optional
-`adapter: { doc, resource, actions, reloadDoc }`. Give each mounted renderer a
+`adapter: { doc, resource, actions, reloadDoc, getCallEditorDefaults }`. Give each mounted renderer a
 stable resource for its complete record type/name identity. The application owns
 authorised reads, cache identity, pagination, origin/association metadata and
 write policy; CRM does not resolve relationship associations.
@@ -54,6 +54,11 @@ merge them over the native Task creation defaults (`Backlog`, `Low`) before
 insertion. A caller can supply its already-authorised creation context without a
 second save to reassociate the new record. Existing Note/Task launches do not
 receive caller creation defaults, preserving their recorded associations.
+When rendering calls through `native.Activities`, an optional synchronous
+`adapter.getCallEditorDefaults(call)` supplies the same per-source defaults to
+both the Calls list and Activity stream. It receives the rendered native call,
+allowing the owning app to resolve its source identity independently of the
+viewed parent. Without the callback (or with an empty result), defaults are `{}`.
 Ordinary callers retain native Note defaults and Task defaults; native insert,
 link callbacks and server permissions remain authoritative.
 

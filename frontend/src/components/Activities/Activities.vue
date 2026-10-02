@@ -107,7 +107,11 @@
                 />
               </div>
             </div>
-            <CallArea class="mb-4" :activity="call" />
+            <CallArea
+              class="mb-4"
+              :activity="call"
+              :editorDefaults="adapter?.getCallEditorDefaults?.(call) || {}"
+            />
           </div>
         </div>
       </div>
@@ -241,7 +245,10 @@
             "
             class="mb-4"
           >
-            <CallArea :activity="activity" />
+            <CallArea
+              :activity="activity"
+              :editorDefaults="adapter?.getCallEditorDefaults?.(activity) || {}"
+            />
           </div>
           <div v-else class="mb-4 flex flex-col gap-2 py-1.5">
             <div class="flex items-center justify-stretch gap-2 text-base">
