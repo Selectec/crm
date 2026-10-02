@@ -397,6 +397,16 @@
       :icon="emptyTextIcon"
       :top="top"
     />
+    <div
+      v-if="all_activities?.hasMore && !all_activities.loading && !all_activities.error"
+      class="flex justify-center px-3 py-4 sm:px-10"
+    >
+      <Button
+        :label="__('Load more')"
+        :loading="all_activities.loadingMore"
+        @click="all_activities.loadMore()"
+      />
+    </div>
   </FadedScrollableDiv>
   <slot name="composer" :doc="doc" :method="title" :resource="all_activities">
   <div v-if="!adapter">

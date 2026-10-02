@@ -34,7 +34,7 @@ export function useRelationshipActivity({ record, scripts, nativeTabs, context }
         activity.value = customization.relationshipActivity
           ? markRaw(customization.relationshipActivity)
           : null
-        error.value = ''
+        error.value = customization.relationshipActivityError || ''
         if (initial && activity.value) changeTab(activity.value.initialTab)
       } catch (failure) {
         if (current === generation) {

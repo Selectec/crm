@@ -7,6 +7,7 @@
         {{ note.title }}
       </div>
       <Dropdown
+        v-if="canDelete"
         :options="[
           {
             label: __('Delete'),
@@ -57,6 +58,7 @@ import { usersStore } from '@/stores/users'
 
 defineProps({
   note: { type: Object, default: () => ({}) },
+  canDelete: { type: Boolean, default: true },
 })
 
 const notes = defineModel({ type: Object })

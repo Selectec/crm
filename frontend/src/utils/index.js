@@ -381,7 +381,14 @@ export async function setupCustomizations(scripts, obj) {
       statuses = statuses.concat(_script?.statuses || [])
     }
   }
-  return { statuses, actions, relationshipActivity: collectRelationshipActivity(customizations) }
+  let relationshipActivity = null
+  let relationshipActivityError = ''
+  try {
+    relationshipActivity = collectRelationshipActivity(customizations)
+  } catch (error) {
+    relationshipActivityError = error.message
+  }
+  return { statuses, actions, relationshipActivity, relationshipActivityError }
 }
 
 async function getListScript(script, obj) {

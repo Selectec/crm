@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createApp, h, reactive, nextTick } from 'vue'
 import { createRouter, createMemoryHistory } from 'vue-router'
-import { Button, Dialog, ErrorMessage, Badge, FormControl } from 'frappe-ui'
+import { Button, Dialog, ErrorMessage, Badge, FormControl, TextInput } from 'frappe-ui'
 import Organization from '@/pages/Organization.vue'
 import Contact from '@/pages/Contact.vue'
 import MobileOrganization from '@/pages/MobileOrganization.vue'
@@ -13,8 +13,12 @@ import Activities from '@/components/Activities/Activities.vue'
 import NoteArea from '@/components/Activities/NoteArea.vue'
 import DoctypeModals from '@/components/Modals/DoctypeModals.vue'
 import { useDoctypeModal } from '@/composables/doctypeModal'
+import { setupCustomizations } from '@/utils'
 
-const fixture = vi.hoisted(() => ({ enabled: true, documents: new Map(), requests: [] }))
+// External boot data used by genuine native date/timestamp controls.
+window.sysdefaults = { ...window.sysdefaults, date_format: 'yyyy-mm-dd', time_format: 'HH:mm:ss' }
+
+const fixture = vi.hoisted(() => ({ enabled: true, documents: new Map(), requests: [], requestOptions: [] }))
 vi.mock('@/data/document', async () => {
   const { reactive } = await import('vue')
   return { useDocument(doctype, name) {
@@ -47,7 +51,9 @@ vi.mock('frappe-ui', async (original) => {
   return { ...actual, usePageMeta() {}, createListResource() { return reactive({data: []}) },
     createResource(options) {
       fixture.requests.push(options.url)
+      fixture.requestOptions.push(options)
       let data = []
+      if (options.url === 'crm.api.activities.get_activities') data = options.transform([[],[],[],[],[]])
       if (options.url.includes('get_sidepanel_sections')) data = []
       if (options.url.includes('get_fields_layout')) data = [{name:'main',label:'',sections:[{name:'note',label:'',columns:[{name:'one',fields:[{fieldname:'title',fieldtype:'Data',label:'Title',visible:true},{fieldname:'content',fieldtype:'Text Editor',label:'Content',visible:true}]}]}]}]
       return reactive({data, reload() {}, submit: async () => {}, loading:false})
@@ -88,7 +94,7 @@ async function open(Page, props) {
   app=createApp({render:()=>h('div',[h(Page,props),h(DoctypeModals)])})
   app.use(router)
   app.use(translationPlugin)
-  for(const [name, component] of Object.entries({Button,Dialog,ErrorMessage,Badge,FormControl,EmptyState,DeleteLinkedDocModal})) app.component(name,component)
+  for(const [name, component] of Object.entries({Button,Dialog,ErrorMessage,Badge,FormControl,TextInput,EmptyState,DeleteLinkedDocModal})) app.component(name,component)
   app.mount(element);await settle()
 }
 
@@ -134,6 +140,41 @@ describe('existing native relationship pages',()=>{
 
 // Native rendering remains unchanged; the application owns authorised typed reads.
 describe('native relationship activity resource', () => {
+  it('renders native versions separately from Notes and Tasks and loads older entries', async () => {
+    const loadMore = vi.fn()
+    const resource = reactive({
+      data:{
+        versions:[{name:'Creation',activity_type:'creation',creation:'2026-10-02 10:00:00',owner:'Staff',data:'created this contact'}],
+        calls:[],notes:[{title:'A separate Note'}],tasks:[{title:'A separate Task'}],attachments:[],
+      },
+      loading:false,error:null,reload:vi.fn(),hasMore:true,loadMore,
+    })
+    loadMore.mockImplementation(() => {
+      resource.data.versions.push({name:'Older change',activity_type:'changed',creation:'2026-10-01 10:00:00',owner:'Staff',data:{field:'company_name',field_label:'Organisation',old_value:'Earlier employer',value:'Current employer'}})
+      resource.hasMore=false
+    })
+    fixture.requests=[]
+    await open({render:()=>h(Activities,{
+      doctype:'Contact',docname:'Same Name',tabs:[{name:'Activity'}],
+      adapter:{resource,doc:{name:'Same Name',full_name:'Person'},actions:{}},
+    },{
+      header:({doc,method})=>h('div',`${doc.full_name}: ${method}`),
+      composer:()=>h('div','Relationship composer'),
+    })},{})
+    expect(element.textContent).toContain('Person: Activity')
+    expect(element.textContent).toContain('created this contact')
+    expect(element.textContent).toContain('Relationship composer')
+    expect(element.textContent).not.toContain('A separate Note')
+    expect(element.textContent).not.toContain('A separate Task')
+    expect(fixture.requests).not.toContain('crm.api.activities.get_activities')
+    const more=[...element.querySelectorAll('button')].find(button=>button.textContent==='Load more')
+    expect(more).toBeDefined()
+    more.click(); await settle()
+    expect(loadMore).toHaveBeenCalledOnce()
+    expect(element.textContent).toContain('Earlier employer')
+    expect(element.textContent).toContain('Current employer')
+    expect([...element.querySelectorAll('button')].some(button=>button.textContent==='Load more')).toBe(false)
+  })
   it('distinguishes a failed source load from an empty native history and supports retry', async () => {
     const router = createRouter({history:createMemoryHistory(),routes:[{path:'/',component:{render:()=>null}}]})
     await router.push('/'); await router.isReady()
@@ -187,4 +228,51 @@ describe('native source permission capabilities', () => {
     expect(document.body.querySelector('input[placeholder="Title"]').disabled).toBe(false)
     expect(document.body.querySelector('[contenteditable="true"]')).not.toBeNull()
   })
+})
+
+describe('shared Form Script compatibility', () => {
+  for (const [doctype,routeName,param] of [['CRM Lead','Lead','leadId'],['CRM Deal','Deal','dealId']]) {
+    it(`preserves independent actions, status options and source navigation for ${doctype}`, async () => {
+      const router={push:vi.fn()}
+      const result=await setupCustomizations([
+        {script:`function setupForm({doc,router}) { return {actions:[{label:'Open source',onClick:()=>router.push({name:'${routeName}',params:{${param}:doc.name}})}],statuses:[{label:'First status'}]} }`},
+        {script:"function setupForm() { return {actions:[{label:'Other action'}],statuses:[{label:'Other status'}]} }"},
+      ],{doc:{doctype,name:'Sales record'},router})
+      expect(result.actions.map(action=>action.label)).toEqual(['Open source','Other action'])
+      expect(result.statuses.map(status=>status.label)).toEqual(['First status','Other status'])
+      result.actions[0].onClick()
+      expect(router.push).toHaveBeenCalledWith({name:routeName,params:{[param]:'Sales record'}})
+      expect(result.relationshipActivity).toBeNull()
+    })
+  }
+  it('keeps independent header actions available when an optional activity contribution is invalid', async () => {
+    const result=await setupCustomizations([
+      {script:"function setupForm() { return {actions:[{label:'Existing action'}],statuses:[{label:'Existing status'}]} }"},
+      {script:"function setupForm() { return {relationshipActivity:{version:99}} }"},
+    ],{doc:{doctype:'CRM Organization',name:'Organisation'}})
+    expect(result.actions.map(action=>action.label)).toEqual(['Existing action'])
+    expect(result.statuses.map(status=>status.label)).toEqual(['Existing status'])
+    expect(result.relationshipActivity).toBeNull()
+    expect(result.relationshipActivityError).toContain('Invalid relationship activity contribution')
+  })
+})
+
+describe('native sales activity defaults', () => {
+  for (const doctype of ['CRM Lead','CRM Deal']) {
+    it(`keeps the default resource and native note creation context for ${doctype}`, async () => {
+      fixture.requestOptions=[]
+      await open({render:()=>h(Activities,{doctype,docname:'Sales record',tabs:[{name:'Notes'}]})},{})
+      const requests=fixture.requestOptions.filter(options=>options.url==='crm.api.activities.get_activities')
+      expect(requests).toHaveLength(1)
+      expect(requests[0].params).toEqual({name:'Sales record'})
+      expect(requests[0].cache).toEqual(['activity','Sales record'])
+      expect(element.textContent).toContain('No Notes Found')
+      const create=[...element.querySelectorAll('button')].find(button=>button.textContent==='New Note')
+      create.click(); await settle()
+      expect(document.body.textContent).toContain('Create Note')
+      expect(useDoctypeModal().defaults.value).toEqual({reference_doctype:doctype,reference_docname:'Sales record'})
+      expect(useDoctypeModal().readOnly.value).toBe(false)
+      expect(document.body.querySelector('[contenteditable="true"]')).not.toBeNull()
+    })
+  }
 })

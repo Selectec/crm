@@ -41,7 +41,8 @@ the existing native Tabs row, before existing related-record navigation. Their
 component receives the full record type/name, current record, selected method,
 methods and a public `changeTab(name)` function. No outer activity tab is added.
 No contribution retains the native record layout. Conflicting contributions or
-malformed descriptors produce an explicit error; one activity area has one owner.
+malformed descriptors produce an explicit error; independent existing header
+actions and status options remain available. One activity area has one owner.
 
 `relationshipUI` version 1 uses CRM's Vue instance and provides `h`, `ref`,
 `computed`, `watch`, `onMounted`, `onUnmounted`, `createResource`, `call`, `toast`,
@@ -56,6 +57,67 @@ needed. Template strings are not compiled by this runtime.
 Removing an application's script removes its UI contribution. It must not delete
 native source records. Independent existing scripts and header actions remain
 registered through the existing CRM mechanism.
+
+## Native rendering and editor inputs
+
+The owning application may render `native.Activities` with its existing
+`doctype`, `docname`, `tabs` and `tabIndex` inputs and an optional
+`adapter: { doc, resource, actions, reloadDoc }`. Give each mounted renderer a
+stable resource for its complete record type/name identity. The application owns
+authorised reads, cache identity, pagination, origin/association metadata and
+write policy; CRM does not resolve relationship associations.
+
+The resource supplies native presentation data:
+
+- `data: { versions, calls, notes, tasks, attachments }`, using the existing
+  native activity record shapes. Activity reads versions and calls; Notes and
+  Tasks remain separate method lists. The renderer sorts and enriches these
+  presentation records, so adapt a copy when retaining an independent service
+  response.
+- `loading`, `error` and `reload()` distinguish initial loading, failed reads and
+  successful empty results. Failure displays the error and a Retry action.
+- Optional `hasMore`, `loadMore()` and `loadingMore` expose bounded older-entry
+  loading. The application appends/deduplicates accessible native records and
+  clears `hasMore` at exhaustion; CRM supplies the Load more control.
+
+In adapter mode the native header/composer defaults and sales modal collection
+are suppressed. Use the `header` and `composer` slots, each receiving
+`{ doc, method, resource }`, for implemented application controls/composers.
+No placeholder methods are installed. For lists rendered inside Activities,
+`actions` provides the corresponding native action facade, for example
+`showNote(note)` or task operations; standalone native cards can be composed by
+the application instead. Without an adapter, Lead/Deal loading, cache keys,
+native header/composers and modal defaults retain their existing paths.
+
+`native.NoteArea` accepts an optional `canDelete` Boolean, defaulting to true for
+existing callers. An application passes the accessible source's deletion
+capability to hide unavailable controls. Deletion still uses native
+`frappe.client.delete` and reloads its model resource; server permissions and
+lifecycle hooks remain authoritative.
+
+`showModal({ doctype, name, title, defaults, callbacks, readOnly })` launches the
+native doctype modal. Its callbacks are `afterInsert(doc)` and `afterUpdate(doc)`.
+Use creation defaults for new records; omit them when opening an existing source
+to preserve its recorded references. Optional `readOnly: true` displays the full
+native field layout and rich text without Create/Update or field-layout editing;
+field-script overrides cannot weaken the requested view mode. Native custom
+actions remain available for source navigation. Every launch resets the default
+to editable unless readOnly is explicitly supplied. This is presentation, not a
+permission grant or a replacement for native server-side write checks.
+
+## Maintenance boundary
+
+This is a maintained CRM extension at a declared immutable commit. The owner
+must review the four page hosts, shared Form Script loader and exported native
+component interfaces against each upstream upgrade, run the native default and
+relationship checks, build the actual application and verify application-owned
+record/permission journeys. Keeping the patch is an ongoing responsibility;
+upstream acceptance and a release date are not assumed.
+
+If upstream provides an equivalent Organisation/Contact desktop/mobile contract,
+review its interface and component compatibility against these acceptance
+boundaries before replacing the patch. Preserve native history and explicit
+application ownership when retiring registrations or adapters.
 
 ## Verification boundary
 
@@ -86,5 +148,9 @@ passed all three. The unchanged mobile routes separately failed the two missing-
 method journeys; after adding the same host seam, all five desktop/mobile journeys
 passed, including the retained native mobile information pane. The versioned-
 contribution unit check also passed. A shared composable owns registration for
-all four hosts. The typed Activities resource/action adapter remains a subsequent
-step; these checks are a bounded embedding proof, not #190 acceptance.
+all four hosts. Subsequent component checks cover the native typed resource,
+failure/retry, distinct Activity versus Notes/Tasks, older-entry loading, full
+read-only rich note/default reset, deletion capability and independent
+Lead/Deal Form Script actions/statuses. These use fake backend transport and are
+bounded component evidence, not native persistence/permission or full feature
+acceptance. The maintained application must complete its real-site journeys.
