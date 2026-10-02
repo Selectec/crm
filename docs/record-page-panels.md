@@ -156,10 +156,19 @@ insufficient evidence.
 
 Run in the isolated CRM worktree with the existing container/dependencies:
 
+The default Vitest configuration merges the native component configuration, so
+one command can run unit and integration checks. It retains native Vue transforms,
+framework aliases, peer deduplication and `test.server.deps.inline` for Frappe UI's
+unbuilt source. Without inlining, Node tries to resolve its extensionless imports
+outside Vite and integration collection fails. This is test configuration, separate
+from the development optimizer settings above. Vitest gives its own configuration
+priority over `vite.config.js`; see the [official configuration and merge guidance](https://vitest.dev/config/)
+and [dependency inlining contract](https://vitest.dev/config/server.html#inline).
+
 ```sh
 python tests/test_record_page.py # use the Bench environment Python
 cd frontend
-node node_modules/vitest/vitest.mjs run tests/unit
+node node_modules/vitest/vitest.mjs run tests/integration/relationshipPages.test.js tests/unit
 node node_modules/vitest/vitest.mjs run --config vitest.relationship.config.js
 ```
 
