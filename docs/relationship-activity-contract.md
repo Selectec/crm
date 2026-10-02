@@ -42,6 +42,19 @@ capability to hide unavailable controls. Deletion still uses native
 `frappe.client.delete` and reloads its model resource; server permissions and
 lifecycle hooks remain authoritative.
 
+`native.AttachmentArea` accepts optional `canDelete` and `canTogglePrivacy`
+Booleans, both defaulting to true for existing callers. A contributing app passes
+its source capabilities to hide unavailable controls; native delete and privacy
+endpoints retain their server checks. `attachments` use the existing File shape,
+including an identity-qualified `file_url` when the app requires one.
+
+Panels may call `formDialog(options)` to collect transient editable fields using
+the existing native FieldLayout dialog and `useFileUpload()` for Frappe UI’s
+native multipart uploader. Upload options include `private`, `doctype`,
+`docname`, `method`, and `params`; parameters are sent in the same upload request.
+The application supplies and authorises its callback and association fields.
+CRM adds no storage, upload endpoint, association policy or permission grant.
+
 `showModal({ doctype, name, title, defaults, callbacks, readOnly, fullDocumentSave })` launches the
 native doctype modal. Its callbacks are `afterInsert(doc)` and `afterUpdate(doc)`.
 Use creation defaults for new records; omit them when opening an existing source

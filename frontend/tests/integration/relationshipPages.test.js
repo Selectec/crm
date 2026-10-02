@@ -17,6 +17,9 @@ import { useAttachments } from '@/composables/useAttachments'
 import { setupCustomizations } from '@/utils'
 import { useRecordPagePanels } from '@/composables/useRecordPagePanels'
 import RecordPagePanels from '@/components/RecordPagePanels.vue'
+import AttachmentArea from '@/components/Activities/AttachmentArea.vue'
+import FieldLayoutDialogContainer from '@/components/Modals/FieldLayoutDialogContainer.vue'
+import { fieldLayoutDialogs } from '@/utils/renderFieldLayoutDialog'
 
 // External boot data used by genuine native date/timestamp controls.
 window.sysdefaults = { ...window.sysdefaults, date_format: 'yyyy-mm-dd', time_format: 'HH:mm:ss' }
@@ -124,12 +127,12 @@ vi.mock('@/components/DeleteLinkedDocModal.vue', () => ({default:{render:()=>nul
 
 let app, element
 async function settle() { for(let i=0;i<8;i++) { await nextTick(); await new Promise(resolve=>setTimeout(resolve,0)) } }
-afterEach(()=>{app?.unmount();element?.remove();document.body.innerHTML='';fixture.documents.clear();fixture.script=null;fixture.contributions=null;fixture.rendererFactory=null;fixture.discovery=null;fixture.loadFailure=null;fixture.rendererLoad=null;fixture.nativeControllers=false;fixture.controllerScript=null;fixture.controllerPause=null;fixture.enabled=true;useDoctypeModal().show.value=false})
+afterEach(()=>{app?.unmount();element?.remove();document.body.innerHTML='';fixture.documents.clear();fixture.script=null;fixture.contributions=null;fixture.rendererFactory=null;fixture.discovery=null;fixture.loadFailure=null;fixture.rendererLoad=null;fixture.nativeControllers=false;fixture.controllerScript=null;fixture.controllerPause=null;fixture.enabled=true;useDoctypeModal().show.value=false;fieldLayoutDialogs.value=[];vi.unstubAllGlobals()})
 async function open(Page, props) {
   const router=createRouter({history:createMemoryHistory(),routes:[{path:'/',name:'Test',component:{render:()=>null}},{path:'/organizations',name:'Organizations',component:{render:()=>null}},{path:'/contacts',name:'Contacts',component:{render:()=>null}},{path:'/organizations/:organizationId',name:'Organization',component:{render:()=>null}},{path:'/contacts/:contactId',name:'Contact',component:{render:()=>null}}]})
   await router.push('/');await router.isReady()
   element=document.createElement('div');document.body.append(element)
-  app=createApp({render:()=>h('div',[h(Page,props),h(DoctypeModals)])})
+  app=createApp({render:()=>h('div',[h(Page,props),h(DoctypeModals),h(FieldLayoutDialogContainer)])})
   app.use(router)
   app.use(translationPlugin)
   for(const [name, component] of Object.entries({Button,Dialog,ErrorMessage,Badge,FormControl,TextInput,FeatherIcon,EmptyState,DeleteLinkedDocModal})) app.component(name,component)
@@ -366,7 +369,7 @@ describe('existing native relationship pages',()=>{
     await settle()
     const input = document.body.querySelector('input[placeholder="Title"]')
     input.value = 'Unsent draft'
-    input.dispatchEvent(new Event('input',{bubbles:true}))
+    input.dispatchEvent(new Event('change',{bubbles:true}))
     input.dispatchEvent(new Event('change',{bubbles:true}))
     await settle()
     expect(input.value).toBe('Unsent draft')
@@ -786,4 +789,82 @@ describe('native sales activity defaults', () => {
       expect(document.body.querySelector('[contenteditable="true"]')).not.toBeNull()
     })
   }
+})
+
+
+describe('native record panel file controls', () => {
+  it('submits the native private upload and custom parameters from the shared runtime', async () => {
+    const sent = []
+    class UploadRequest {
+      static DONE = 4
+      upload = { addEventListener() {} }
+      addEventListener() {}
+      open(...args) { this.openArgs = args }
+      setRequestHeader() {}
+      send(body) {
+        sent.push({ open: this.openArgs, body })
+        this.readyState = 4
+        this.status = 200
+        this.responseText = JSON.stringify({message:{name:'native-file',file_name:'private.txt',is_private:1}})
+        this.onreadystatechange()
+      }
+    }
+    vi.stubGlobal('XMLHttpRequest', UploadRequest)
+    let runtime
+    fixture.rendererFactory = value => {
+      runtime = value
+      return { render: () => h('div', 'Native upload control') }
+    }
+    await open(Organization,{organizationId:'Upload record'})
+    const uploader = runtime.useFileUpload()
+    const result = await uploader.upload(new File(['private bytes'],'private.txt'), {
+      private:true,doctype:'CRM Organization',docname:'Upload record',
+      method:'example.upload',params:{context:'chosen context'},
+    })
+    expect(result).toEqual({name:'native-file',file_name:'private.txt',is_private:1})
+    expect(sent).toHaveLength(1)
+    expect(sent[0].open).toEqual(['POST','/api/method/upload_file',true])
+    expect(sent[0].body.get('file').name).toBe('private.txt')
+    for (const [name,value] of Object.entries({is_private:'1',doctype:'CRM Organization',docname:'Upload record',method:'example.upload',context:'chosen context'})) {
+      expect(sent[0].body.get(name)).toBe(value)
+    }
+    expect(uploader.isUploading.value).toBe(false)
+  })
+  it('opens the existing native form dialog from a panel and returns editable transient context', async () => {
+    let runtime
+    fixture.rendererFactory = value => {
+      runtime=value
+      return { render: () => h('div', 'Native context dialog') }
+    }
+    await open(Organization,{organizationId:'Dialog record'})
+    const submitted = vi.fn()
+    const result = runtime.formDialog({
+      title:'Upload context',fields:[{fieldname:'context',fieldtype:'Data',label:'Context',visible:true}],
+      defaults:{context:'original context'},submitLabel:'Choose File',onSubmit:submitted,
+    })
+    await settle()
+    const input = document.body.querySelector('input[placeholder="Context"]')
+    expect(input.value).toBe('original context')
+    input.value='chosen context'
+    input.dispatchEvent(new Event('change',{bubbles:true}))
+    await settle()
+    ;[...document.body.querySelectorAll('button')].find(button=>button.textContent==='Choose File').click()
+    await expect(result).resolves.toEqual({context:'chosen context'})
+    expect(submitted).toHaveBeenCalledWith({context:'chosen context'})
+    expect(fixture.documents.has(':')).toBe(false)
+  })
+  it('honors optional attachment capabilities while preserving default native controls', async () => {
+    const attachment={name:'private-file',file_name:'private.txt',file_url:'/private/files/private.txt',file_type:'txt',file_size:12,is_private:1,creation:'2026-10-02 12:00:00'}
+    const capabilities=reactive({canDelete:false,canTogglePrivacy:false})
+    await open({render:()=>h(AttachmentArea,{attachments:[attachment],...capabilities})},{})
+    expect(element.textContent).toContain('private.txt')
+    expect(element.querySelector('.lucide-trash-2')).toBeNull()
+    expect(element.querySelector('[data-feather="lock"]')).toBeNull()
+    expect(element.querySelectorAll('button')).toHaveLength(0)
+    capabilities.canDelete=undefined
+    capabilities.canTogglePrivacy=undefined
+    await settle()
+    expect(element.querySelector('.lucide-trash-2')).not.toBeNull()
+    expect(element.querySelectorAll('button')).toHaveLength(2)
+  })
 })

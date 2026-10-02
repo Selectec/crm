@@ -35,6 +35,7 @@
           <TimelineTimestamp :date="attachment.creation" />
           <div class="flex gap-1">
             <Button
+              v-if="canTogglePrivacy"
               :tooltip="
                 attachment.is_private ? __('Make Public') : __('Make Private')
               "
@@ -51,6 +52,7 @@
               </template>
             </Button>
             <Button
+              v-if="canDelete"
               :tooltip="__('Delete Attachment')"
               class="!size-5"
               @click.stop="() => deleteAttachment(attachment.name)"
@@ -83,6 +85,8 @@ import { convertSize, isImage } from '@/utils'
 
 defineProps({
   attachments: { type: Array, default: () => [] },
+  canDelete: { type: Boolean, default: true },
+  canTogglePrivacy: { type: Boolean, default: true },
 })
 
 const emit = defineEmits(['reload'])
