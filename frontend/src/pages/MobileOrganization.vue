@@ -97,7 +97,7 @@
           class="group flex items-center gap-2 border-b border-transparent py-2.5 text-base text-ink-gray-5 duration-300 ease-in-out hover:text-ink-gray-9"
           :class="{ 'text-ink-gray-9': selected }"
         >
-          <span v-if="typeof tab.icon === 'string'" :class="tab.icon" class="h-5 w-5" />
+          <Icon v-if="typeof tab.icon === 'string'" :icon="tab.icon" class="h-5 w-5" />
           <component :is="tab.icon" v-else-if="tab.icon" class="h-5" />
           {{ __(tab.label) }}
           <Badge

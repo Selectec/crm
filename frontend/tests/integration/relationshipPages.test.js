@@ -198,6 +198,16 @@ describe('generic contributor lifecycle',()=>{
     expect([...element.querySelectorAll('[role="tab"]')].every(tab=>!tab.textContent.includes('Summary'))).toBe(true)
     expect(element.querySelector('[role="tab"][aria-selected="true"]')).not.toBeNull()
   })
+  for(const [Page,props] of [[Organization,{organizationId:'Same Name'}],[Contact,{contactId:'Same Name'}],[MobileOrganization,{organizationId:'Same Name'}],[MobileContact,{contactId:'Same Name'}]]) it(`renders declared sprite icons through native Icon on ${Page.__name}`,async()=>{
+    const descriptor=appPanel('demo')
+    descriptor.panels[0].icon='lucide-info'
+    fixture.contributions=[descriptor]
+    await open(Page,props)
+    const summary=[...element.querySelectorAll('[role="tab"]')].find(tab=>tab.textContent.trim()==='Summary')
+    expect(summary.querySelector('svg use')?.getAttribute('href')).toBe('#info')
+    const nativeDeal=[...element.querySelectorAll('[role="tab"]')].find(tab=>tab.textContent.trim().startsWith('Deals'))
+    expect(nativeDeal.querySelector('svg')).not.toBeNull()
+  })
   it('isolates a failed asset contributor and supports retry without losing native tabs',async()=>{
     fixture.contributions=[appPanel('first'),appPanel('second')]
     fixture.loadFailure='first'

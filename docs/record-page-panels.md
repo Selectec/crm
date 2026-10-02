@@ -28,6 +28,8 @@ Identifiers are plain alphanumeric/underscore/hyphen names starting with a lette
 Contribution keys are `owner_app:id`; panel names are `owner_app:id:panel_id`.
 Native panes use reserved `native:*` names; labels never decide dispatch. A panel
 can share a label with a native pane or another contributor without shadowing it.
+Optional lucide string icons render through CRM's native SVG Icon sprite; native
+component icons retain their existing path.
 
 Descriptors sort by `(order, owner_app, id)` before native panes. Competing default
 requests select the first ordered contribution with a visible diagnostic. Without
