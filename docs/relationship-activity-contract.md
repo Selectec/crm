@@ -48,6 +48,15 @@ capability to hide unavailable controls. Deletion still uses native
 `frappe.client.delete` and reloads its model resource; server permissions and
 lifecycle hooks remain authoritative.
 
+`native.CallArea` accepts an optional flat `editorDefaults` object, defaulting to
+`{}`. Its native Call detail actions copy these values into a new Note editor and
+merge them over the native Task creation defaults (`Backlog`, `Low`) before
+insertion. A caller can supply its already-authorised creation context without a
+second save to reassociate the new record. Existing Note/Task launches do not
+receive caller creation defaults, preserving their recorded associations.
+Ordinary callers retain native Note defaults and Task defaults; native insert,
+link callbacks and server permissions remain authoritative.
+
 `native.TaskArea` accepts optional `canDelete` and `canUpdateStatus` Booleans,
 both defaulting to true for existing callers. They independently hide the native
 delete or status controls; opening the complete Task still uses

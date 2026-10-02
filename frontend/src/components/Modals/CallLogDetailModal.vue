@@ -192,6 +192,10 @@ import { useRouter } from 'vue-router'
 
 const router = useRouter()
 
+const props = defineProps({
+  editorDefaults: { type: Object, default: () => ({}) },
+})
+
 const show = defineModel({ type: Boolean })
 
 const callLog = defineModel('callLog', { type: Object })
@@ -212,6 +216,7 @@ function showNote(name) {
     name,
     doctype: 'FCRM Note',
     title: 'Note',
+    defaults: name ? {} : { ...props.editorDefaults },
     callbacks: {
       afterInsert: (d) => addNoteToCallLog(d, true),
       afterUpdate: (d) => addNoteToCallLog(d, false),
@@ -224,7 +229,11 @@ function showTask(name) {
     name,
     doctype: 'CRM Task',
     title: 'Task',
-    defaults: { status: 'Backlog', priority: 'Low' },
+    defaults: {
+      status: 'Backlog',
+      priority: 'Low',
+      ...(!name ? props.editorDefaults : {}),
+    },
     callbacks: {
       afterInsert: (d) => addTaskToCallLog(d, true),
       afterUpdate: (d) => addTaskToCallLog(d, false),

@@ -91,6 +91,7 @@
     <CallLogDetailModal
       v-model="showCallLogDetailModal"
       v-model:callLog="callLog"
+      :editorDefaults="editorDefaults"
     />
   </div>
 </template>
@@ -109,6 +110,7 @@ import { reactive, ref } from 'vue'
 
 const props = defineProps({
   activity: { type: Object, default: () => ({}) },
+  editorDefaults: { type: Object, default: () => ({}) },
 })
 
 const call = reactive(props.activity)
