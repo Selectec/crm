@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createApp, h, nextTick, reactive } from 'vue'
-import { createMemoryHistory, createRouter } from 'vue-router'
+import { createMemoryHistory, createRouter, RouterView } from 'vue-router'
 import { Button } from 'frappe-ui'
 import Tasks from '@/pages/Tasks.vue'
 import translationPlugin from '@/translation'
@@ -47,9 +47,9 @@ async function open(doctype, docname = 'SAME/& identity') {
   fixture.rows = [{ name: 17, title: 'Native Task', reference_doctype: doctype, reference_docname: docname }]
   const placeholder = { render: () => null }
   const router = createRouter({
-    history: createMemoryHistory(),
+    history: createMemoryHistory('/crm'),
     routes: [
-      { path: '/tasks/view/:viewType', name: 'Tasks', component: placeholder },
+      { path: '/tasks/view/:viewType?', alias: '/tasks', name: 'Tasks', component: Tasks },
       { path: '/leads/:leadId', name: 'Lead', component: placeholder },
       { path: '/deals/:dealId', name: 'Deal', component: placeholder },
       { path: '/organizations/:organizationId', name: 'Organization', component: placeholder },
@@ -63,7 +63,7 @@ async function open(doctype, docname = 'SAME/& identity') {
   document.body.append(header)
   element = document.createElement('div')
   document.body.append(element)
-  app = createApp({ render: () => h(Tasks) })
+  app = createApp({ render: () => h(RouterView) })
   app.use(router)
   app.use(translationPlugin)
   app.component('Button', Button)
