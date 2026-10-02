@@ -11,6 +11,7 @@ import EmptyState from '@/components/ListViews/EmptyState.vue'
 import DeleteLinkedDocModal from '@/components/DeleteLinkedDocModal.vue'
 import Activities from '@/components/Activities/Activities.vue'
 import NoteArea from '@/components/Activities/NoteArea.vue'
+import TaskArea from '@/components/Activities/TaskArea.vue'
 import DoctypeModals from '@/components/Modals/DoctypeModals.vue'
 import { useDoctypeModal } from '@/composables/doctypeModal'
 import { useAttachments } from '@/composables/useAttachments'
@@ -711,6 +712,36 @@ describe('native relationship activity resource', () => {
 })
 
 describe('native source permission capabilities', () => {
+  it('honors independent native Task card controls while preserving default workflow actions', async () => {
+    const task={name:171,title:'Shared Task title',assigned_to:'staff@example.test',priority:'Medium',status:'Todo'}
+    const actions={showTask:vi.fn(),updateTaskStatus:vi.fn(),deleteTask:vi.fn()}
+    const capabilities=reactive({canDelete:false,canUpdateStatus:false})
+    await open({render:()=>h(TaskArea,{tasks:[task],modalRef:actions,...capabilities})},{})
+    expect(element.textContent).toContain('Shared Task title')
+    expect(element.querySelectorAll('button')).toHaveLength(0)
+    capabilities.canUpdateStatus=true
+    await settle()
+    expect(element.querySelectorAll('button')).toHaveLength(1)
+    element.querySelector('button').click()
+    await settle()
+    const progress=[...document.body.querySelectorAll('[role="menuitem"]')].find(item=>item.textContent.trim()==='In Progress')
+    expect(progress).toBeDefined()
+    progress.click()
+    await settle()
+    expect(actions.updateTaskStatus).toHaveBeenCalledWith('In Progress',task)
+    expect(actions.showTask).not.toHaveBeenCalled()
+    expect(actions.deleteTask).not.toHaveBeenCalled()
+    capabilities.canUpdateStatus=false
+    capabilities.canDelete=true
+    await settle()
+    expect(element.querySelectorAll('button')).toHaveLength(1)
+    capabilities.canDelete=undefined
+    capabilities.canUpdateStatus=undefined
+    await settle()
+    expect(element.querySelectorAll('button')).toHaveLength(2)
+    element.querySelector('.activity').click()
+    expect(actions.showTask).toHaveBeenCalledWith(task)
+  })
   it('hides native note deletion when unavailable while preserving the default action', async () => {
     const props = reactive({
       note:{name:'Shared Note',title:'Shared title',content:'<p>Complete shared note content</p>',owner:'Staff',modified:'2026-10-02 10:00:00'},
