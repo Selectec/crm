@@ -714,13 +714,20 @@ describe('native relationship activity resource', () => {
 })
 
 describe('native source permission capabilities', () => {
-  async function openCall(editorDefaults) {
+  async function openCall(editorDefaults, method, getCallEditorDefaults) {
     fixture.callLog=reactive({
       name:'Native Call',id:'Native Call',type:'Outgoing',status:'Completed',duration:90,_duration:'1m 30s',
       creation:'2026-10-02 10:00:00',caller:'Staff',receiver:'Person',
-      _caller:{label:'Staff'},_receiver:{label:'Person'},_notes:[],_tasks:[],
+      _caller:{label:'Staff'},_receiver:{label:'Person'},_notes:[],_tasks:[],activity_type:'outgoing_call',
     })
-    await open({render:()=>h(CallArea,{activity:fixture.callLog,...(editorDefaults ? {editorDefaults} : {})})},{})
+    const adapter={
+      doc:{name:'Viewed source'},
+      resource:{data:{versions:[],calls:[fixture.callLog],notes:[],tasks:[],attachments:[]},reload:vi.fn()},
+      actions:{},getCallEditorDefaults,
+    }
+    await open({render:()=>method
+      ? h(Activities,{doctype:'Other Record',docname:'Viewed source',tabs:[{name:method}],adapter})
+      : h(CallArea,{activity:fixture.callLog,...(editorDefaults ? {editorDefaults} : {})})},{})
     element.querySelector('.border.cursor-pointer').click()
     await settle()
     expect(document.body.textContent).toContain('Call Details')
@@ -777,6 +784,27 @@ describe('native source permission capabilities', () => {
     await settle()
     await callAction('Add Task')
     expect(modal.defaults.value).toEqual({status:'Backlog',priority:'Low'})
+  })
+  it.each(['Calls','Activity'])('passes per-source adapter editor defaults through mounted %s calls without changing existing linked sources', async (method) => {
+    const defaults={reference_doctype:'Other Record',reference_docname:'Native Call',custom_context:'opaque'}
+    const getCallEditorDefaults=vi.fn(call=>({...defaults,reference_docname:call.name}))
+    await openCall(undefined,method,getCallEditorDefaults)
+    await callAction('Add Note')
+    const modal=useDoctypeModal()
+    expect(getCallEditorDefaults).toHaveBeenCalledWith(expect.objectContaining({name:'Native Call'}))
+    expect(modal.defaults.value).toEqual(defaults)
+    modal.show.value=false
+    await settle()
+    await callAction('Add Task')
+    expect(modal.defaults.value).toEqual({status:'Backlog',priority:'Low',...defaults})
+    modal.show.value=false
+    await settle()
+    fixture.callLog._notes=[{name:'Existing adapter Note',title:'Existing linked content'}]
+    fixture.documents.set('FCRM Note:Existing adapter Note',reactive({doc:{doctype:'FCRM Note',name:'Existing adapter Note',title:'Existing linked content'},save:{submit:vi.fn()},actions:[],fieldPropertyOverrides:{}}))
+    await settle()
+    await callAction('Edit Note')
+    expect(modal.name.value).toBe('Existing adapter Note')
+    expect(modal.defaults.value).toEqual({})
   })
   it('honors independent native Task card controls while preserving default workflow actions', async () => {
     const task={name:171,title:'Shared Task title',assigned_to:'staff@example.test',priority:'Medium',status:'Todo'}
