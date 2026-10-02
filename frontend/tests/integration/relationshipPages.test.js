@@ -758,6 +758,14 @@ describe('native source permission capabilities', () => {
     await callAction('Edit Note')
     expect(modal.name.value).toBe('Existing Note')
     expect(modal.defaults.value).toEqual({})
+    modal.show.value=false
+    await settle()
+    fixture.callLog._tasks=[{name:171,title:'Existing Task content'}]
+    fixture.documents.set('CRM Task:171',reactive({doc:{doctype:'CRM Task',name:171,title:'Existing Task content'},save:{submit:vi.fn()},actions:[],fieldPropertyOverrides:{}}))
+    await settle()
+    await callAction('Edit Task')
+    expect(modal.name.value).toBe(171)
+    expect(modal.defaults.value).toEqual({status:'Backlog',priority:'Low'})
     expect(defaults.reference_docname).toBe('Source/with spaces')
   })
   it('preserves ordinary Call editor defaults when no creation context is supplied', async () => {
