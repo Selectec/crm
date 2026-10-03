@@ -166,7 +166,9 @@ describe('existing native relationship pages',()=>{
       adapter:{doc:props.context.doc,actions:{},resource:{data:{versions:[activity],calls:[],notes:[],tasks:[],attachments:[]},reload(){}},getEmailProps:() => ({canReply:false})},
     })}})
     await open(Organization,{organizationId:'Native read-only Activity email parent'})
-    const card = element.querySelector('[id="Native Activity email"]')
+    // Native EmailArea has no record-id wrapper; scope its real Activity row
+    // through the displayed body, preserving the renderer's existing markup.
+    const card = [...element.querySelectorAll('.activity')].find(row => row.textContent.includes('Native recorded subject'))
     expect(card).not.toBeNull()
     expect(card.textContent).toContain('Native recorded subject')
     expect(card.querySelector('strong')?.textContent).toBe('recorded email')
