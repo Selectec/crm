@@ -175,6 +175,32 @@ describe('existing native relationship pages',()=>{
     expect(nativeLabels).toContain('added a')
     expect(nativeLabels).toContain('comment')
   })
+  it('honors explicit remark deletion capability through native confirmation and a supplied action', async () => {
+    const activity = {name:'Capability remark',owner:'another-author@example.test',creation:'2026-10-02 12:00:00.000001',content:'<p>Manager-readable native remark</p>'}
+    const deleteAction = vi.fn(async () => {})
+    const reload = vi.fn()
+    fixture.rendererFactory = ui => ({
+      props:['context'],
+      setup(){return ()=>ui.h(ui.native.CommentArea,{activity,canEdit:false,canDelete:true,deleteAction,onReload:reload})},
+    })
+    await open(Organization,{organizationId:'Native manager controls'})
+    const card = element.querySelector('[id="Capability remark"]')
+    const more = card.querySelector('button')
+    expect(more, 'A supplied delete capability must expose the native control for a non-owner').not.toBeNull()
+    more.focus()
+    more.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true}))
+    await settle()
+    let items = [...document.querySelectorAll('[role="menuitem"]')]
+    expect(items.some(item=>item.textContent.trim()==='Edit')).toBe(false)
+    items.find(item=>item.textContent.trim()==='Delete').click()
+    await settle()
+    expect(deleteAction).not.toHaveBeenCalled()
+    items = [...document.querySelectorAll('[role="menuitem"]')]
+    items.find(item=>item.textContent.trim()==='Confirm Delete').click()
+    await settle()
+    expect(deleteAction).toHaveBeenCalledExactlyOnceWith(activity)
+    expect(reload).toHaveBeenCalledTimes(1)
+  })
   it('exposes public typed realtime subscriptions without losing the panel room when native Activities unmounts', async () => {
     const listeners = new Map()
     fixture.socket = {
