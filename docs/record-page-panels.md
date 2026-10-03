@@ -223,3 +223,5 @@ The actual Organization/RecordPagePanels/Activities component regression uses a
 controlled external socket transport and proves public subscriptions, exact typed
 event matching, shared room lifetime, cleanup and retained draft text. It does
 not prove network transport or a contributing app's public page refresh.
+
+The native `EmailEditor` accepts optional `uploadFunction(file)` returning a native uploaded File. It forwards the callback to rich-editor inline uploads and the attachment control; upload failures retain the draft and display an attachment error. Without the callback, both existing native upload routes remain unchanged. The contributor must supply authorization and capture context before uploading.
