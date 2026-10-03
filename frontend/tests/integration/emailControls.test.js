@@ -143,6 +143,86 @@ describe('native Email record-panel facade', () => {
     expect(element.querySelectorAll('button')).toHaveLength(0)
   }, 15000)
 
+  for (const replyAll of [false, true]) {
+    it(`emits the native recorded identity after populating ${replyAll ? 'Reply All' : 'Reply'}`, async () => {
+      const email = {
+        name: 'Actual native thread Communication',
+        sender: 'recorded-sender@example.test',
+        recipients: 'recorded-recipient@example.test',
+        cc: 'recorded-copy@example.test',
+        bcc: 'recorded-blind@example.test',
+        subject: 'Original native thread subject',
+        content: '<p>Immutable recorded quoted body</p>',
+      }
+      const operations = []
+      const chain = {}
+      for (const method of ['clearContent', 'updateAttributes', 'insertContent', 'focus', 'insertContentAt', 'run']) {
+        chain[method] = vi.fn((...args) => { operations.push({ method, args }); return chain })
+      }
+      const emailBox = { show: false, editor: { editor: { chain: () => chain } } }
+      const onReply = vi.fn(() => {
+        expect(emailBox.show).toBe(true)
+        expect(emailBox.editor.subject).toBe(`Re: ${email.subject}`)
+        expect(operations.at(-1).method).toBe('run')
+      })
+      element = document.createElement('div')
+      document.body.append(element)
+      app = createApp({ setup() {
+        const ui = useRecordPanelRuntime({ push() {} }, { on() {}, off() {}, emit() {} })
+        return () => h(ui.native.EmailArea, {
+          activity: { name: email.name, communication_date: '2026-10-03 12:00:00', data: email },
+          emailBox,
+          onReply,
+        })
+      } })
+      app.use(createPinia())
+      app.use(translationPlugin)
+      for (const [name, component] of Object.entries({ Badge, Button, FeatherIcon })) app.component(name, component)
+      app.mount(element)
+      await vi.waitFor(() => expect(element.querySelectorAll('button')).toHaveLength(2), { timeout: 10000 })
+      element.querySelectorAll('button')[replyAll ? 1 : 0].click()
+      await nextTick()
+      expect(emailBox.editor.fromEmail).toBe(email.sender)
+      expect(emailBox.editor.toEmails).toEqual([email.sender])
+      expect(emailBox.editor.ccEmails).toEqual(replyAll ? [email.cc, email.recipients] : [])
+      expect(emailBox.editor.bccEmails).toEqual(replyAll ? [email.bcc] : [])
+      expect(chain.insertContent).toHaveBeenCalledWith(`<blockquote>${email.content}</blockquote>`)
+      expect(onReply).toHaveBeenCalledExactlyOnceWith(email, replyAll)
+    }, 15000)
+  }
+
+  it('retains native Reply population when no optional listener is supplied', async () => {
+    const chain = {}
+    for (const method of ['clearContent', 'updateAttributes', 'insertContent', 'focus', 'insertContentAt', 'run']) {
+      chain[method] = vi.fn(() => chain)
+    }
+    const emailBox = { show: false, editor: { editor: { chain: () => chain } } }
+    element = document.createElement('div')
+    document.body.append(element)
+    app = createApp({ setup() {
+      const ui = useRecordPanelRuntime({ push() {} }, { on() {}, off() {}, emit() {} })
+      return () => h(ui.native.EmailArea, {
+        activity: { communication_date: '2026-10-03 12:00:00', data: {
+          sender: 'stock-sender@example.test', recipients: 'stock-recipient@example.test',
+          subject: 'Stock native subject', content: '<p>Stock native quote</p>',
+        } },
+        emailBox,
+      })
+    } })
+    app.use(createPinia())
+    app.use(translationPlugin)
+    for (const [name, component] of Object.entries({ Badge, Button, FeatherIcon })) app.component(name, component)
+    app.mount(element)
+    await vi.waitFor(() => expect(element.querySelectorAll('button')).toHaveLength(2), { timeout: 10000 })
+    element.querySelector('button').click()
+    await nextTick()
+    expect(emailBox.show).toBe(true)
+    expect(emailBox.editor.subject).toBe('Re: Stock native subject')
+    expect(emailBox.editor.toEmails).toEqual(['stock-sender@example.test'])
+    expect(chain.insertContent).toHaveBeenCalledWith('<blockquote><p>Stock native quote</p></blockquote>')
+    expect(chain.run).toHaveBeenCalledOnce()
+  }, 15000)
+
   for (const entry of ['inline', 'attachment', 'attachment failure']) {
     it(`forwards a supplied uploader from the actual native Email ${entry} control`, async () => {
       class SyntheticXHR extends EventTarget {
