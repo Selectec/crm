@@ -159,6 +159,39 @@ async function open(Page, props) {
 }
 
 describe('existing native relationship pages',()=>{
+  it('forwards explicit native remark capabilities and actions through the actual Activities renderer', async () => {
+    const activity = {name:'Native Activity manager remark',activity_type:'comment',owner:'another-author@example.test',creation:'2026-10-02 12:00:00.000001',modified:'2026-10-02 12:01:00.000001',content:'<p>Complete managed Activity remark</p>'}
+    const deleteAction = vi.fn(async () => {})
+    const reload = vi.fn()
+    fixture.rendererFactory = ui => ({props:['context'],setup(props){return () => ui.h(ui.native.Activities, {
+      doctype:props.context.doctype,docname:props.context.name,tabs:[{name:'Activity'}],
+      adapter:{doc:props.context.doc,actions:{},resource:{data:{versions:[activity],calls:[],notes:[],tasks:[],attachments:[]},reload},getCommentProps:() => ({canEdit:false,canDelete:true,deleteAction})},
+    })}})
+    await open(Organization,{organizationId:'Native mixed Activity parent'})
+    const card = element.querySelector('[id="Native Activity manager remark"] [id="Native Activity manager remark"]')
+    expect(card).not.toBeNull()
+    expect(card.textContent).toContain('Complete managed Activity remark')
+    const more = card.querySelector('button[aria-haspopup="menu"]')
+    expect(more, 'Native Activities must forward authoritative non-owner delete capability').not.toBeNull()
+    more.focus()
+    more.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true}))
+    await settle()
+    let menu = document.querySelector('[role="menu"]')
+    expect(menu).not.toBeNull()
+    expect([...menu.querySelectorAll('[role="menuitem"],button')].some(item=>item.textContent.trim()==='Edit')).toBe(false)
+    const remove = [...menu.querySelectorAll('[role="menuitem"],button')].find(item=>item.textContent.trim()==='Delete')
+    expect(remove).toBeDefined()
+    remove.click()
+    await settle()
+    menu = document.querySelector('[role="menu"]')
+    const confirm = [...menu.querySelectorAll('[role="menuitem"],button')].find(item=>item.textContent.trim()==='Confirm Delete')
+    expect(confirm).toBeDefined()
+    confirm.click()
+    await settle()
+    expect(deleteAction).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({name:activity.name}))
+    expect(reload).toHaveBeenCalledOnce()
+  })
+
   it('renders real native remarks through the public record-panel component facade', async () => {
     fixture.rendererFactory = ui => ({
       props: ['context'],
