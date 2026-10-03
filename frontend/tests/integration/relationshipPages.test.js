@@ -171,7 +171,9 @@ describe('existing native relationship pages',()=>{
     await open(Organization, {organizationId: 'Native remarks parent'})
     expect(element.textContent).toContain('Complete native internal remark')
     expect(element.querySelector('[id="Native remark identity"] strong')?.textContent).toBe('internal remark')
-    expect(element.textContent).toContain('added a comment')
+    const nativeLabels = [...element.querySelectorAll('[id="Native remark identity"] span')].map(span=>span.textContent.trim())
+    expect(nativeLabels).toContain('added a')
+    expect(nativeLabels).toContain('comment')
   })
   it('exposes public typed realtime subscriptions without losing the panel room when native Activities unmounts', async () => {
     const listeners = new Map()
