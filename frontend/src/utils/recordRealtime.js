@@ -38,17 +38,19 @@ export function subscribeDocument(socket, doctype, name) {
 export function createRecordRealtime(socket, onDispose) {
   const listeners = new Set()
   const rooms = new Set()
+  function remove(listener) {
+    if (!listeners.delete(listener)) return
+    socket.off(listener.event, listener.callback)
+  }
   function off(event, handler) {
     for (const listener of listeners) {
       if (listener.event === event && listener.handler === handler) {
-        socket.off(event, handler)
-        listeners.delete(listener)
+        remove(listener)
       }
     }
   }
   onDispose(() => {
-    for (const listener of listeners) socket.off(listener.event, listener.handler)
-    listeners.clear()
+    for (const listener of listeners) remove(listener)
     for (const release of rooms) release()
     rooms.clear()
   })
@@ -57,10 +59,10 @@ export function createRecordRealtime(socket, onDispose) {
       if (typeof event !== 'string' || !event || typeof handler !== 'function') {
         throw new TypeError('Realtime listener requires an event and callback')
       }
-      const listener = { event, handler }
+      const listener = { event, handler, callback: (...args) => handler(...args) }
       listeners.add(listener)
-      socket.on(event, handler)
-      return () => off(event, handler)
+      socket.on(event, listener.callback)
+      return () => remove(listener)
     },
     off,
     subscribeDocument(doctype, name) {
