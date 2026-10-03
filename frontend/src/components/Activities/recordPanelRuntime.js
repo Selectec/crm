@@ -15,6 +15,7 @@ const native = {
   CallArea: defineAsyncComponent(() => import('./CallArea.vue')),
   EmailEditor: defineAsyncComponent(() => import('@/components/EmailEditor.vue')),
   CommentBox: defineAsyncComponent(() => import('@/components/CommentBox.vue')),
+  CommentArea: defineAsyncComponent(() => import('./CommentArea.vue')),
   AttachmentArea: defineAsyncComponent(() => import('./AttachmentArea.vue')),
 }
 

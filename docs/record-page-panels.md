@@ -84,7 +84,9 @@ onUnmounted}`, plus those helpers as top-level aliases; `createResource`, `call`
 Frappe UI’s native uploader, including private storage, progress, cancellation
 and custom multipart `params`. Neither helper changes source permissions. `native` contains `Button`,
 `ErrorMessage`, `TextEditor`, `Activities`, `NoteArea`, `TaskArea`, `CallArea`,
-`EmailEditor`, `CommentBox`, `AttachmentArea`. Apps must use these supplied runtimes
+`EmailEditor`, `CommentBox`, `CommentArea`, `AttachmentArea`. `CommentArea` accepts
+the native remark `activity` record and emits `reload` after its stock actions.
+Apps must use these supplied runtimes
 and render functions rather than bundle a second Vue, Frappe UI or router. Native
 component/modal inputs are documented in [the native facade](relationship-activity-contract.md).
 
