@@ -1,8 +1,45 @@
-import { afterEach, describe, expect, it } from 'vitest'
-import { createApp, h, nextTick } from 'vue'
-import { Badge, Button, FeatherIcon } from 'frappe-ui'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { createApp, h, nextTick, ref } from 'vue'
+import { createPinia } from 'pinia'
+import { Badge, Button, Dialog, ErrorMessage, FeatherIcon, TextInput } from 'frappe-ui'
 import { useRecordPanelRuntime } from '@/components/Activities/recordPanelRuntime'
 import translationPlugin from '@/translation'
+
+const fixture = vi.hoisted(() => ({ nativeUploads: [], xhrUploads: [] }))
+const uploaded = {
+  name: 'Synthetic native uploaded File',
+  file_name: 'native-composer.txt',
+  file_url: '/private/files/native-composer.txt',
+  is_private: 1,
+}
+// Boot resources and the two upload transports are fake. The actual native
+// EmailEditor, rich editor and attachment-input components remain mounted.
+vi.mock('@/data/document', async () => {
+  const { reactive } = await import('vue')
+  return { useDocument: () => ({ document: reactive({ doc: {
+    user_emails: [{ email_account: 'Synthetic configured account', email_id: 'sender@example.test' }],
+  } }) }) }
+})
+vi.mock('@/stores/settings', async () => {
+  const { reactive, ref } = await import('vue')
+  return { getSettings: () => ({ brand: reactive({}), settings: ref({}), _settings: reactive({ doc: {} }) }) }
+})
+vi.mock('@/stores/users', () => ({ usersStore: () => ({
+  getUser: () => ({ email: 'author@example.test', full_name: 'Native author' }),
+}) }))
+vi.mock('frappe-ui/frappe', () => ({ useTelemetry: () => ({ capture() {} }) }))
+vi.mock('frappe-ui', async (original) => {
+  const actual = await original()
+  const { reactive } = await import('vue')
+  return { ...actual,
+    useFileUpload: () => ({ upload: async (file, options) => {
+      fixture.nativeUploads.push({ file, options })
+      return { name: 'Native transport result', file_name: file.name, file_url: '/private/files/native-composer.txt' }
+    } }),
+    createResource: () => reactive({ data: [], loading: false, submit: async () => [], reload() {} }),
+    createListResource: () => reactive({ data: [], fetch: async () => [], reload() {} }),
+  }
+})
 
 window.sysdefaults = {
   ...window.sysdefaults,
@@ -15,6 +52,9 @@ afterEach(() => {
   app?.unmount()
   element?.remove()
   document.body.innerHTML = ''
+  fixture.nativeUploads = []
+  fixture.xhrUploads = []
+  vi.unstubAllGlobals()
 })
 
 async function settle() {
@@ -57,6 +97,7 @@ describe('native Email record-panel facade', () => {
       },
     })
     app.use(translationPlugin)
+    app.use(createPinia())
     for (const [name, component] of Object.entries({ Badge, Button, FeatherIcon })) {
       app.component(name, component)
     }
@@ -71,4 +112,68 @@ describe('native Email record-panel facade', () => {
     const rendered = new DOMParser().parseFromString(content, 'text/html')
     expect(rendered.querySelector('strong')?.textContent).toBe('recorded Email body')
   })
+
+  for (const entry of ['inline', 'attachment']) {
+    it(`forwards a supplied uploader from the actual native Email ${entry} control`, async () => {
+      class SyntheticXHR extends EventTarget {
+        static DONE = 4
+        upload = new EventTarget()
+        readyState = 0
+        status = 200
+        responseText = JSON.stringify({ message: uploaded })
+        open() {}
+        setRequestHeader() {}
+        send(body) {
+          fixture.xhrUploads.push(body)
+          this.readyState = SyntheticXHR.DONE
+          this.onreadystatechange?.()
+        }
+      }
+      vi.stubGlobal('XMLHttpRequest', SyntheticXHR)
+      const uploadFunction = vi.fn(async () => uploaded)
+      const editor = ref(null)
+      const content = ref('<p>Keep this <strong>native draft</strong>.</p>')
+      const attachments = ref([])
+      element = document.createElement('div')
+      document.body.append(element)
+      app = createApp({ setup() {
+        const ui = useRecordPanelRuntime({ push() {} }, { on() {}, off() {}, emit() {} })
+        return () => h(ui.native.EmailEditor, {
+          ref: editor,
+          doctype: 'Contact',
+          modelValue: { name: 'Native Email parent', email: 'recipient@example.test' },
+          content: content.value,
+          'onUpdate:content': (value) => { content.value = value },
+          attachments: attachments.value,
+          'onUpdate:attachments': (value) => { attachments.value = value },
+          uploadFunction,
+        })
+      } })
+      app.use(createPinia())
+      app.use(translationPlugin)
+      app.provide('session', { user: 'author@example.test' })
+      for (const [name, component] of Object.entries({ Badge, Button, Dialog, ErrorMessage, FeatherIcon, TextInput })) {
+        app.component(name, component)
+      }
+      app.mount(element)
+      await settle()
+      const file = new File(['Synthetic selected bytes'], uploaded.file_name, { type: 'text/plain' })
+      expect(element.querySelector('[contenteditable="true"]')).not.toBeNull()
+      if (entry === 'inline') {
+        expect(editor.value.editor.commands.dropFiles([file])).toBe(true)
+      } else {
+        const input = element.querySelector('input[type="file"]')
+        expect(input).not.toBeNull()
+        Object.defineProperty(input, 'files', { configurable: true, value: [file] })
+        input.dispatchEvent(new Event('change', { bubbles: true }))
+      }
+      await settle()
+      expect(uploadFunction).toHaveBeenCalledExactlyOnceWith(file)
+      expect(fixture.nativeUploads).toEqual([])
+      expect(fixture.xhrUploads).toEqual([])
+      expect(content.value).toContain('native draft')
+      if (entry === 'attachment') expect(attachments.value).toEqual([uploaded])
+      else expect(content.value).toContain(uploaded.file_url)
+    })
+  }
 })
