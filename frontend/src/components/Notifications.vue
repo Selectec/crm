@@ -143,6 +143,9 @@ function getRoute(notification) {
       dealId: notification.reference_name,
     }
   }
+  if (notification.route_params) {
+    params = notification.route_params
+  }
 
   return {
     name: notification.route_name,
