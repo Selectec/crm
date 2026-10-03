@@ -69,6 +69,12 @@ viewed parent. Without the callback (or with an empty result), defaults are `{}`
 Ordinary callers retain native Note defaults and Task defaults; native insert,
 link callbacks and server permissions remain authoritative.
 
+`adapter.getCommentProps(comment)` optionally supplies public native CommentArea
+props to both the Comments list and mixed Activity stream. The application owns
+source capabilities and actions; CRM forwards them to the existing native card.
+The `activity` prop always remains the rendered native record. Without the
+callback, ordinary native owner controls and native save/delete behavior remain.
+
 `native.TaskArea` accepts optional `canDelete` and `canUpdateStatus` Booleans,
 both defaulting to true for existing callers. They independently hide the native
 delete or status controls; opening the complete Task still uses

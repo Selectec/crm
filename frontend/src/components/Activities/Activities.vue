@@ -71,6 +71,7 @@
             </div>
             <CommentArea
               class="mb-4"
+              v-bind="adapter?.getCommentProps?.(comment) || {}"
               :activity="comment"
               @reload="all_activities.reload()"
             />
@@ -202,6 +203,7 @@
             class="mb-4"
           >
             <CommentArea
+              v-bind="adapter?.getCommentProps?.(activity) || {}"
               :activity="activity"
               @reload="all_activities.reload()"
             />
