@@ -112,10 +112,32 @@ describe('native Email record-panel facade', () => {
     expect(element.textContent).toContain('selected-recipient@example.test')
     expect(element.textContent).toContain('selected-copy@example.test')
     expect(element.textContent).toContain('selected-blind-copy@example.test')
+    expect(element.querySelectorAll('button')).toHaveLength(2)
     // EmailContent intentionally isolates rich message HTML in an iframe.
     const content = element.querySelector('iframe')?.srcdoc || ''
     const rendered = new DOMParser().parseFromString(content, 'text/html')
     expect(rendered.querySelector('strong')?.textContent).toBe('recorded Email body')
+  }, 15000)
+
+  it('retains complete native recorded Email for a reader without reply capability', async () => {
+    const activity = { communication_date: '2026-10-03 12:00:00', data: {
+      sender: 'native-sender@example.test', recipients: 'native-recipient@example.test',
+      subject: 'Read-only native complete Email', content: '<p>Complete reader body</p>', attachments: [],
+    } }
+    element = document.createElement('div')
+    document.body.append(element)
+    app = createApp({ setup() {
+      const ui = useRecordPanelRuntime({ push() {} }, { on() {}, off() {}, emit() {} })
+      return () => h(ui.native.EmailArea, { activity, canReply: false })
+    } })
+    app.use(createPinia())
+    app.use(translationPlugin)
+    for (const [name, component] of Object.entries({ Badge, Button, FeatherIcon })) app.component(name, component)
+    app.mount(element)
+    await vi.waitFor(() => expect(element.textContent).toContain('Read-only native complete Email'), { timeout: 10000 })
+    expect(element.textContent).toContain('native-recipient@example.test')
+    expect(element.querySelector('iframe').srcdoc).toContain('Complete reader body')
+    expect(element.querySelectorAll('button')).toHaveLength(0)
   }, 15000)
 
   for (const entry of ['inline', 'attachment', 'attachment failure']) {
