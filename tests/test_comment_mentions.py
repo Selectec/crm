@@ -35,6 +35,7 @@ class TestNativeMentionTitles(unittest.TestCase):
 				with (
 					patch.object(frappe, "get_doc", return_value=parent),
 					patch.object(frappe, "get_cached_value", return_value="Native author"),
+					patch.object(api, "_", side_effect=lambda text: text),
 					patch.object(api, "notify_user") as notify,
 				):
 					api.notify_mentions(comment)
