@@ -171,7 +171,8 @@ describe('existing native relationship pages',()=>{
     const card = [...element.querySelectorAll('.activity')].find(row => row.textContent.includes('Native recorded subject'))
     expect(card).not.toBeNull()
     expect(card.textContent).toContain('Native recorded subject')
-    expect(card.querySelector('strong')?.textContent).toBe('recorded email')
+    // Native EmailContent intentionally isolates the full rich body in srcdoc.
+    expect(card.querySelector('iframe')?.srcdoc).toContain('<strong>recorded email</strong>')
     expect(card.querySelectorAll('button').length, 'An Activity email has no composer companion; authoritative canReply false must reach native EmailArea').toBe(0)
   })
 
