@@ -6,13 +6,54 @@ import { showSettings, activeSettingsPage } from '@/composables/settings'
 import { runSequentially, parseAssignees, sanitizeText } from '@/utils'
 import { findMissingMandatory } from '@/utils/fieldTransforms'
 import { createDocumentResource, createResource, toast } from 'frappe-ui'
-import { ref, reactive, getCurrentInstance } from 'vue'
+import { ref, reactive, getCurrentInstance, onScopeDispose } from 'vue'
 
 const documentsCache = {}
 const controllersCache = {}
 const controllerSetupCache = {}
 const assigneesCache = {}
 const permissionsCache = {}
+const realtimeOwners = new WeakMap()
+
+function ownDocumentRealtime(socket, resource, doctype, name) {
+  let state = realtimeOwners.get(socket)
+  if (!state) {
+    const records = new Map()
+    const update = ({ doctype, name }) => {
+      const record = records.get(JSON.stringify([doctype, String(name)]))
+      // Native resources retain the error and invoke their onError hook. The
+      // event dispatcher has no caller to consume a rejected fetch promise.
+      record?.resource.reload().catch(() => {})
+    }
+    const reconnect = () => {
+      for (const doctype of new Set([...records.values()].map(record => record.doctype))) {
+        socket.emit('doctype_subscribe', doctype)
+      }
+    }
+    state = { records, update, reconnect }
+    realtimeOwners.set(socket, state)
+    socket.on('list_update', update)
+    socket.on('connect', reconnect)
+  }
+  const key = JSON.stringify([doctype, name])
+  let record = state.records.get(key)
+  if (!record) {
+    record = { resource, doctype, owners: 0 }
+    state.records.set(key, record)
+    socket.emit('doctype_subscribe', doctype)
+  }
+  record.owners++
+  onScopeDispose(() => {
+    if (--record.owners) return
+    state.records.delete(key)
+    if (state.records.size) return
+    socket.off('list_update', state.update)
+    socket.off('connect', state.reconnect)
+    realtimeOwners.delete(socket)
+    // Doctype rooms are shared with native list resources. Releasing this
+    // listener must not unsubscribe those independent consumers.
+  })
+}
 
 export function useDocument(
   doctype,
@@ -44,7 +85,6 @@ export function useDocument(
     if (docname) {
       documentStore[doctype][docname] = createDocumentResource(
         {
-          realtime: Boolean(vm?.$socket),
           doctype: doctype,
           name: docname,
           onSuccess: async () => await setupFormScript(),
@@ -94,6 +134,9 @@ export function useDocument(
             },
           },
           ...resourceOverrides,
+          // The native cached resource does not dispose its realtime handler.
+          // Own that handler in the calling Vue scope instead of its cache.
+          realtime: false,
         },
         vm,
       )
@@ -126,6 +169,10 @@ export function useDocument(
       })
       setupFormScript()
     }
+  }
+
+  if (docname && !editorDocument && vm?.$socket && resourceOverrides.realtime !== false) {
+    ownDocumentRealtime(vm.$socket, documentStore[doctype][docname], doctype, docname)
   }
 
   assigneesCache[doctype] = assigneesCache[doctype] || {}

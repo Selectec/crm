@@ -301,3 +301,22 @@ native Dialog controlled-close behavior, parent discovery and scoped registry
 approval. Mounted contracts verify the stock field dialog, public exposure,
 guarded close and denial-before-assets; actual site permissions and app
 admission remain separately required before release.
+
+## Native editor resource lifetime
+
+`useDocument` keeps native document resources cached while a mounted Vue owner
+holds their `list_update` listener. Closing the last owner removes that listener;
+a later modal reopening the same cached record acquires it again. Concurrent
+owners share one fetch per matching typed update, and active subscriptions rejoin
+on socket reconnect. Editor-local working copies do not acquire another listener.
+`resourceOverrides.realtime: false` still opts out.
+
+CRM uses the public socket `on`/`off` API and Vue scope disposal. It leaves native
+doctype rooms joined because independent list resources also use them, and does
+not delete the native document cache. Fetch failures still populate the native
+resource error and run its error hook; the event dispatcher consumes the rejected
+Promise rather than creating an unhandled rejection. This fixes the demonstrated
+closed-Note reload after deletion without suppressing a live editor's error.
+Mounted native modal/resource checks cover closing, reopening, simultaneous
+owners, typed updates, reconnect and retained active fetch errors. Actual Socket
+delivery and browser editor journeys remain separate acceptance checks.
