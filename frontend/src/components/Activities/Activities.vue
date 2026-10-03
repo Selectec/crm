@@ -128,7 +128,7 @@
       <template v-else>
         <div
           v-for="(activity, i) in activities"
-          :key="activity.name"
+          :key="adapter?.getActivityKey?.(activity) ?? activity.name"
           class="activity px-3 sm:px-10"
           :class="
             ['Activity', 'Emails'].includes(title)
