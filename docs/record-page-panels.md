@@ -84,7 +84,10 @@ onUnmounted}`, plus those helpers as top-level aliases; `createResource`, `call`
 Frappe UI’s native uploader, including private storage, progress, cancellation
 and custom multipart `params`. Neither helper changes source permissions. `native` contains `Button`,
 `ErrorMessage`, `TextEditor`, `Activities`, `NoteArea`, `TaskArea`, `CallArea`,
-`EmailEditor`, `CommentBox`, `CommentArea`, `AttachmentArea`. `CommentArea` accepts
+`EmailEditor`, `EmailArea`, `CommentBox`, `CommentArea`, `AttachmentArea`. `EmailArea`
+accepts the native communication `activity` shape (`data` contains participants,
+subject, body and attachments) and its existing `emailBox` reply-editor facade.
+It retains the native iframe content renderer. `CommentArea` accepts
 the native remark `activity` record and emits `reload` after its stock actions.
 Apps must use these supplied runtimes
 and render functions rather than bundle a second Vue, Frappe UI or router. Native

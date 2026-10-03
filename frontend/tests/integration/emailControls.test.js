@@ -66,6 +66,9 @@ describe('native Email record-panel facade', () => {
     expect(element.textContent).toContain('selected-recipient@example.test')
     expect(element.textContent).toContain('selected-copy@example.test')
     expect(element.textContent).toContain('selected-blind-copy@example.test')
-    expect(element.querySelector('strong')?.textContent).toBe('recorded Email body')
+    // EmailContent intentionally isolates rich message HTML in an iframe.
+    const content = element.querySelector('iframe')?.srcdoc || ''
+    const rendered = new DOMParser().parseFromString(content, 'text/html')
+    expect(rendered.querySelector('strong')?.textContent).toBe('recorded Email body')
   })
 })
