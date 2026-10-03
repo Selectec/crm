@@ -5,6 +5,7 @@ import { createPinia } from 'pinia'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import { Button, FeatherIcon } from 'frappe-ui'
 import Notifications from '@/components/Notifications.vue'
+import MobileNotification from '@/pages/MobileNotification.vue'
 import translationPlugin from '@/translation'
 
 const fixture = vi.hoisted(() => ({ rows:[] }))
@@ -19,18 +20,20 @@ window.sysdefaults = {...window.sysdefaults,date_format:'yyyy-mm-dd',time_format
 let app,element
 afterEach(()=>{app?.unmount();element?.remove();fixture.rows=[];document.body.innerHTML=''})
 
-async function render(rows){
+async function render(rows, component = Notifications){
   fixture.rows=rows
   const router=createRouter({history:createMemoryHistory(),routes:[
     {path:'/',name:'Home',component:{render:()=>null}},
+    {path:'/notifications',name:'Notifications',component:{render:()=>null}},
     {path:'/organizations/:organizationId',name:'Organization',component:{render:()=>null}},
     {path:'/contacts/:contactId',name:'Contact',component:{render:()=>null}},
     {path:'/leads/:leadId',name:'Lead',component:{render:()=>null}},
     {path:'/deals/:dealId',name:'Deal',component:{render:()=>null}},
   ]})
   await router.push('/');await router.isReady()
+  const header=document.createElement('div');header.id='app-header';document.body.append(header)
   element=document.createElement('div');document.body.append(element)
-  app=createApp({render:()=>h(Notifications)})
+  app=createApp({render:()=>h(component)})
   app.use(createPinia());app.use(router);app.use(translationPlugin)
   app.component('Button',Button);app.component('FeatherIcon',FeatherIcon)
   app.mount(element);await nextTick()
@@ -53,4 +56,24 @@ it('native notification links honor explicit typed route parameters while stock 
 it('ordinary native Lead and Deal notification routes retain their existing identity', async()=>{
   await render([row('Lead','Native lead'),row('Deal','Native deal')])
   expect([...element.querySelectorAll('a')].map(link=>link.getAttribute('href'))).toEqual(['/leads/Native%20lead#native-remark','/deals/Native%20deal#native-remark'])
+})
+
+
+it('native mobile notification page honors explicit typed relationship route parameters', async()=>{
+  await render([
+    row('Organization','Native organisation',{organizationId:'Native organisation'}),
+    row('Contact','Native contact',{contactId:'Native contact'}),
+  ], MobileNotification)
+  expect([...element.querySelectorAll('a')].map(link=>link.getAttribute('href'))).toEqual([
+    '/organizations/Native%20organisation#Native%20remark%20Organization',
+    '/contacts/Native%20contact#Native%20remark%20Contact',
+  ])
+})
+
+it('ordinary mobile Lead and Deal notification links retain native target and remark identity', async()=>{
+  await render([row('Lead','Native lead'),row('Deal','Native deal')], MobileNotification)
+  expect([...element.querySelectorAll('a')].map(link=>link.getAttribute('href'))).toEqual([
+    '/leads/Native%20lead#Native%20remark%20Lead',
+    '/deals/Native%20deal#Native%20remark%20Deal',
+  ])
 })
