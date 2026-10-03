@@ -48,7 +48,10 @@ window.sysdefaults = {
 }
 
 let app, element
-afterEach(() => {
+// Complete native iframe loading before removing its browsing context.
+// happy-dom otherwise dispatches an already queued load event after unmount.
+afterEach(async () => {
+  await window.happyDOM.waitUntilComplete()
   app?.unmount()
   element?.remove()
   document.body.innerHTML = ''

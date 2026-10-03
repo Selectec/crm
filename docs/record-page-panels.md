@@ -225,3 +225,5 @@ event matching, shared room lifetime, cleanup and retained draft text. It does
 not prove network transport or a contributing app's public page refresh.
 
 The native `EmailEditor` accepts optional `uploadFunction(file, options?)` returning a native uploaded File. Native inline uploads supply optional cancellation/progress options. It forwards the callback to rich-editor inline uploads and the attachment control; upload failures retain the draft and display an attachment error. Without the callback, both existing native upload routes remain unchanged. The contributor must supply authorization and capture context before uploading.
+
+`EmailArea.canReply` defaults to true. A contributor may disable the native reply controls when no authorized companion composer is available; complete recorded message content and participants remain visible. Source read and send permissions stay application/server responsibilities.

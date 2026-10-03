@@ -25,7 +25,7 @@
           :theme="status.color"
         />
         <TimelineTimestamp :date="activity.communication_date" />
-        <div class="flex gap-0.5">
+        <div v-if="canReply" class="flex gap-0.5">
           <Button
             :tooltip="__('Reply')"
             variant="ghost"
@@ -84,11 +84,13 @@ import { reactive, computed } from 'vue'
 const props = defineProps({
   activity: { type: Object, default: () => ({}) },
   emailBox: { type: Object, default: () => ({}) },
+  canReply: { type: Boolean, default: true },
 })
 
 const emailBox = reactive(props.emailBox)
 
 function reply(email, reply_all = false) {
+  if (!props.canReply) return
   emailBox.show = true
   let editor = emailBox.editor
   let message = email.content
