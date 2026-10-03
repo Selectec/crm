@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { Emitter } from '@socket.io/component-emitter'
 import { createApp, h, reactive, nextTick, toRaw } from 'vue'
 import { createPinia } from 'pinia'
 import { createRouter, createMemoryHistory } from 'vue-router'
@@ -93,7 +94,10 @@ vi.mock('frappe-ui', async (original) => {
       if (options.url === 'crm.fcrm.doctype.crm_call_log.crm_call_log.get_call_log') data = fixture.callLog
       if (options.url.includes('get_sidepanel_sections')) data = []
       if (options.url.includes('get_fields_layout')) data = [{name:'main',label:'',sections:[{name:'note',label:'',columns:[{name:'one',fields:[{fieldname:'title',fieldtype:'Data',label:'Title',visible:true},{fieldname:'content',fieldtype:'Text Editor',label:'Content',visible:true}]}]}]}]
-      return reactive({data, reload() { if(options.url === 'crm.fcrm.doctype.crm_call_log.crm_call_log.get_call_log') fixture.callReload?.() }, submit: async (params) => {
+      return reactive({data, reload() {
+        if(options.url === 'crm.fcrm.doctype.crm_call_log.crm_call_log.get_call_log') fixture.callReload?.()
+        if(options.url === 'crm.api.whatsapp.get_whatsapp_messages') fixture.whatsappReload?.()
+      }, submit: async (params) => {
         if (options.url === 'frappe.client.save') {
           fixture.nativeSaves.push(JSON.parse(JSON.stringify(params)))
           if (fixture.saveResult) options.onSuccess?.(fixture.saveResult)
@@ -159,6 +163,38 @@ async function open(Page, props) {
 }
 
 describe('existing native relationship pages',()=>{
+  it.each([true, false])('removes only its own native WhatsApp callback on unmount (adapter=%s)', async adapter => {
+    const socket = new Emitter()
+    socket.emit = vi.fn(socket.emit.bind(socket))
+    fixture.socket = socket
+    const otherConsumer = vi.fn()
+    socket.on('whatsapp_message', otherConsumer)
+    const props = {doctype:'CRM Lead',docname:'Independent native WhatsApp consumers',tabs:[{name:'Activity'}]}
+    if (adapter) props.adapter = {
+      doc:{doctype:props.doctype,name:props.docname},actions:{},
+      resource:{data:{versions:[],calls:[],notes:[],tasks:[],attachments:[]},reload(){}},
+    }
+    await open({render:()=>h(Activities, props, {composer:()=>null})}, {})
+    const request = fixture.requestOptions.findLast(options=>options.url==='crm.api.whatsapp.get_whatsapp_messages')
+    const nativeReload = vi.fn()
+    // The resource transport is controlled; the actual Activities lifecycle
+    // subscribes to the installed Socket.IO emitter with its real off overloads.
+    fixture.whatsappReload = nativeReload
+    const message = {reference_doctype:props.doctype,reference_name:props.docname}
+    socket.emit('whatsapp_message', {...message,reference_name:'Another record'})
+    expect(nativeReload).not.toHaveBeenCalled()
+    socket.emit('whatsapp_message', message)
+    expect(nativeReload).toHaveBeenCalledTimes(1)
+    expect(request.params).toEqual(message)
+    expect(socket.listeners('whatsapp_message')).toHaveLength(2)
+    app.unmount(); app = null
+    expect(socket.listeners('whatsapp_message')).toEqual([otherConsumer])
+    socket.emit('whatsapp_message', message)
+    expect(otherConsumer).toHaveBeenCalledTimes(3)
+    expect(nativeReload).toHaveBeenCalledTimes(1)
+    socket.off('whatsapp_message', otherConsumer)
+    fixture.whatsappReload = null
+  })
   it('keeps typed mixed Activity identities and an unsent native remark draft when equal names reorder', async () => {
     const name = 'Equal native mixed source identity'
     const comment = {doctype:'Comment',name,activity_type:'comment',owner:'another-author@example.test',creation:'2026-10-02 12:00:00.000001',modified:'2026-10-02 12:00:00.000001',content:'<p>Originally loaded native remark</p>'}
