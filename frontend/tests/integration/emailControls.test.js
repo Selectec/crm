@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createApp, h, nextTick, ref } from 'vue'
 import { createPinia } from 'pinia'
-import { Badge, Button, Dialog, ErrorMessage, FeatherIcon, TextInput } from 'frappe-ui'
+import { Badge, Button, Dialog, ErrorMessage, FeatherIcon, FormControl, TextInput } from 'frappe-ui'
 import { useRecordPanelRuntime } from '@/components/Activities/recordPanelRuntime'
 import translationPlugin from '@/translation'
 
@@ -36,7 +36,7 @@ vi.mock('frappe-ui', async (original) => {
       fixture.nativeUploads.push({ file, options })
       return { name: 'Native transport result', file_name: file.name, file_url: '/private/files/native-composer.txt' }
     } }),
-    createResource: () => reactive({ data: [], loading: false, submit: async () => [], reload() {} }),
+    createResource: () => reactive({ data: [], loading: false, submit: async () => [], update() {}, reload() {} }),
     createListResource: () => reactive({ data: [], fetch: async () => [], reload() {} }),
   }
 })
@@ -157,7 +157,7 @@ describe('native Email record-panel facade', () => {
       app.use(createPinia())
       app.use(translationPlugin)
       app.provide('session', { user: 'author@example.test' })
-      for (const [name, component] of Object.entries({ Badge, Button, Dialog, ErrorMessage, FeatherIcon, TextInput })) {
+      for (const [name, component] of Object.entries({ Badge, Button, Dialog, ErrorMessage, FeatherIcon, FormControl, TextInput })) {
         app.component(name, component)
       }
       app.mount(element)
@@ -182,7 +182,13 @@ describe('native Email record-panel facade', () => {
         expect(uploadFunction.mock.calls.length + fixture.nativeUploads.length + fixture.xhrUploads.length).toBeGreaterThan(0)
       }, { timeout: 10000 })
       await settle()
-      expect(uploadFunction).toHaveBeenCalledExactlyOnceWith(file)
+      expect(uploadFunction).toHaveBeenCalledTimes(1)
+      expect(uploadFunction.mock.calls[0][0]).toBe(file)
+      if (entry === 'inline') {
+        // Native media uploads also provide progress/cancellation options.
+        expect(uploadFunction.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal)
+        expect(uploadFunction.mock.calls[0][1].onProgress).toBeTypeOf('function')
+      }
       expect(fixture.nativeUploads).toEqual([])
       expect(fixture.xhrUploads).toEqual([])
       expect(content.value).toContain('native draft')
