@@ -84,7 +84,10 @@ onUnmounted}`, plus those helpers as top-level aliases; `createResource`, `call`
 Frappe UI’s native uploader, including private storage, progress, cancellation
 and custom multipart `params`. Neither helper changes source permissions. `native` contains `Button`,
 `ErrorMessage`, `TextEditor`, `Activities`, `NoteArea`, `TaskArea`, `CallArea`,
-`EmailEditor`, `CommentBox`, `CommentArea`, `AttachmentArea`. `CommentArea` accepts
+`EmailEditor`, `EmailArea`, `CommentBox`, `CommentArea`, `AttachmentArea`. `EmailArea`
+accepts the native communication `activity` shape (`data` contains participants,
+subject, body and attachments) and its existing `emailBox` reply-editor facade.
+It retains the native iframe content renderer. `CommentArea` accepts
 the native remark `activity` record and emits `reload` after its stock actions.
 Apps must use these supplied runtimes
 and render functions rather than bundle a second Vue, Frappe UI or router. Native
@@ -220,3 +223,7 @@ The actual Organization/RecordPagePanels/Activities component regression uses a
 controlled external socket transport and proves public subscriptions, exact typed
 event matching, shared room lifetime, cleanup and retained draft text. It does
 not prove network transport or a contributing app's public page refresh.
+
+The native `EmailEditor` accepts optional `uploadFunction(file, options?)` returning a native uploaded File. Native inline uploads supply optional cancellation/progress options. It forwards the callback to rich-editor inline uploads and the attachment control; upload failures retain the draft and display an attachment error. Without the callback, both existing native upload routes remain unchanged. The contributor must supply authorization and capture context before uploading.
+
+`EmailArea.canReply` defaults to true. A contributor may disable the native reply controls when no authorized companion composer is available; complete recorded message content and participants remain visible. Source read and send permissions stay application/server responsibilities.
