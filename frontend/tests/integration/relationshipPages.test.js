@@ -58,6 +58,10 @@ vi.mock('frappe-ui', async (original) => {
   const actual = await original()
   const { reactive } = await import('vue')
   return { ...actual, call: async (method, context) => {
+    if (method === 'frappe.client.set_value' && context.doctype === 'Comment') {
+      fixture.commentWrites?.push(context)
+      return context
+    }
     if (method.startsWith('crm.integrations.api.add_')) {
       fixture.callMutations?.push({method,context})
       return context.note || context.task
@@ -141,7 +145,7 @@ vi.mock('@/components/DeleteLinkedDocModal.vue', () => ({default:{render:()=>nul
 
 let app, element
 async function settle() { for(let i=0;i<8;i++) { await nextTick(); await new Promise(resolve=>setTimeout(resolve,0)) } }
-afterEach(()=>{app?.unmount();element?.remove();document.body.innerHTML='';fixture.documents.clear();fixture.script=null;fixture.callLog=null;fixture.contributions=null;fixture.rendererFactory=null;fixture.discovery=null;fixture.loadFailure=null;fixture.rendererLoad=null;fixture.nativeControllers=false;fixture.controllerScript=null;fixture.controllerPause=null;fixture.enabled=true;fixture.socket=null;useDoctypeModal().show.value=false;fieldLayoutDialogs.value=[];vi.unstubAllGlobals()})
+afterEach(()=>{app?.unmount();element?.remove();document.body.innerHTML='';fixture.documents.clear();fixture.script=null;fixture.callLog=null;fixture.contributions=null;fixture.rendererFactory=null;fixture.discovery=null;fixture.loadFailure=null;fixture.rendererLoad=null;fixture.nativeControllers=false;fixture.controllerScript=null;fixture.controllerPause=null;fixture.commentWrites=null;fixture.enabled=true;fixture.socket=null;useDoctypeModal().show.value=false;fieldLayoutDialogs.value=[];vi.unstubAllGlobals()})
 async function open(Page, props) {
   const router=createRouter({history:createMemoryHistory(),routes:[{path:'/',name:'Test',component:{render:()=>null}},{path:'/organizations',name:'Organizations',component:{render:()=>null}},{path:'/contacts',name:'Contacts',component:{render:()=>null}},{path:'/organizations/:organizationId',name:'Organization',component:{render:()=>null}},{path:'/contacts/:contactId',name:'Contact',component:{render:()=>null}}]})
   await router.push('/');await router.isReady()
@@ -207,6 +211,40 @@ describe('existing native relationship pages',()=>{
     await settle()
     expect(deleteAction).toHaveBeenCalledExactlyOnceWith(activity)
     expect(reload).toHaveBeenCalledTimes(1)
+  })
+  it('retains an unsent native remark draft without saving after edit capability is revoked', async () => {
+    const activity = {name:'Revoked remark',owner:'another-author@example.test',creation:'2026-10-02 12:00:00.000001',content:'<p>Original native remark</p>'}
+    const capabilities = reactive({canEdit:true,canDelete:false})
+    const reload = vi.fn()
+    fixture.commentWrites = []
+    fixture.rendererFactory = ui => ({
+      props:['context'],
+      setup(){return ()=>ui.h(ui.native.CommentArea,{activity,...capabilities,onReload:reload})},
+    })
+    await open(Organization,{organizationId:'Native revoked edit controls'})
+    const card = element.querySelector('[id="Revoked remark"]')
+    const more = card.querySelector('button[aria-haspopup="menu"]')
+    more.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true}))
+    await settle()
+    const edit = [...document.querySelectorAll('[role="menu"] [role="menuitem"]')].find(item=>item.textContent.trim()==='Edit')
+    expect(edit).toBeDefined()
+    edit.click()
+    await settle()
+    const editor = card.querySelector('[contenteditable="true"]')
+    expect(editor).not.toBeNull()
+    editor.innerHTML = '<p>Unsent retained native draft</p>'
+    editor.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:'Unsent retained native draft'}))
+    await settle()
+    capabilities.canEdit = false
+    await settle()
+    const save = [...card.querySelectorAll('button')].find(button=>button.textContent.trim()==='Save')
+    expect(save).toBeDefined()
+    save.click()
+    await settle()
+    expect(fixture.commentWrites).toEqual([])
+    expect(reload).not.toHaveBeenCalled()
+    expect(card.textContent).toContain('Unsent retained native draft')
+    expect([...card.querySelectorAll('button')].some(button=>button.textContent.trim()==='Cancel')).toBe(true)
   })
   it('exposes public typed realtime subscriptions without losing the panel room when native Activities unmounts', async () => {
     const listeners = new Map()
