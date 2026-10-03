@@ -47,6 +47,9 @@ async function mount() {
     }
     if (url === 'frappe.client.get_list') return []
     if (url === 'frappe.client.get_doc_permissions') return { permissions: { read: 1, write: 1 } }
+    if (url === 'crm.fcrm.doctype.crm_fields_layout.crm_fields_layout.get_fields_layout') {
+      return [{ name: 'main', label: 'Note', sections: [] }]
+    }
     return []
   })
   const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: { render: () => null } }] })
