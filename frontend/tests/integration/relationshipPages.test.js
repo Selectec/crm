@@ -248,6 +248,41 @@ describe('existing native relationship pages',()=>{
     expect(card.textContent).toContain('Unsent retained native draft')
     expect([...card.querySelectorAll('button')].some(button=>button.textContent.trim()==='Cancel')).toBe(true)
   })
+  it('supplies the loaded native remark revision to an optional save action and retains a conflicting draft', async () => {
+    const activity = {name:'Revision remark',owner:'remark-author@example.test',creation:'2026-10-02 12:00:00.000001',modified:'2026-10-02 12:00:00.000001',content:'<p>Originally loaded native remark</p>',reference_doctype:'Contact',reference_name:'Recorded source'}
+    const state = reactive({activity})
+    const saveAction = vi.fn(async () => { throw {exc_type:'TimestampMismatchError',messages:['Native document changed. Please refresh.']} })
+    const reload = vi.fn()
+    fixture.commentWrites = []
+    fixture.rendererFactory = ui => ({
+      props:['context'],
+      setup(){return ()=>ui.h(ui.native.CommentArea,{activity:state.activity,canEdit:true,canDelete:false,saveAction,onReload:reload})},
+    })
+    await open(Organization,{organizationId:'Native revision controls'})
+    const card = element.querySelector('[id="Revision remark"]')
+    card.querySelector('button[aria-haspopup="menu"]').dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true}))
+    await settle()
+    const edit = [...document.querySelectorAll('[role="menu"] [role="menuitem"]')].find(item=>item.textContent.trim()==='Edit')
+    expect(edit).toBeDefined()
+    edit.click()
+    await settle()
+    const editor = card.querySelector('[contenteditable="true"]')
+    editor.innerHTML = '<p>Retained unsent loaded revision draft</p>'
+    editor.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:'Retained unsent loaded revision draft'}))
+    await settle()
+    state.activity = {...activity,modified:'2026-10-02 13:00:00.000001',content:'<p>Newer server winner</p>'}
+    await settle()
+    const save = [...card.querySelectorAll('button')].find(button=>button.textContent.trim()==='Save')
+    save.click()
+    await settle()
+    expect(saveAction).toHaveBeenCalledTimes(1)
+    expect(saveAction.mock.calls[0][0]).toMatchObject({name:activity.name,modified:activity.modified,owner:activity.owner,reference_doctype:'Contact',reference_name:'Recorded source'})
+    expect(saveAction.mock.calls[0][0].content).toContain('Retained unsent loaded revision draft')
+    expect(fixture.commentWrites).toEqual([])
+    expect(reload).not.toHaveBeenCalled()
+    expect(card.querySelector('[contenteditable="true"]').textContent).toContain('Retained unsent loaded revision draft')
+    expect(save.disabled).toBe(false)
+  })
   it('exposes public typed realtime subscriptions without losing the panel room when native Activities unmounts', async () => {
     const listeners = new Map()
     fixture.socket = {
