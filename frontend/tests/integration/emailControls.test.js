@@ -102,7 +102,12 @@ describe('native Email record-panel facade', () => {
       app.component(name, component)
     }
     app.mount(element)
-    await settle()
+    // Public registry components are async imports; wait for the native view,
+    // rather than assuming a fixed number of ticks loads the module graph.
+    await vi.waitFor(() => {
+      expect(element.textContent).toContain('Native complete recorded subject')
+      expect(element.querySelector('iframe')).not.toBeNull()
+    }, { timeout: 10000 })
     expect(element.textContent).toContain('Native complete recorded subject')
     expect(element.textContent).toContain('selected-recipient@example.test')
     expect(element.textContent).toContain('selected-copy@example.test')
@@ -111,7 +116,7 @@ describe('native Email record-panel facade', () => {
     const content = element.querySelector('iframe')?.srcdoc || ''
     const rendered = new DOMParser().parseFromString(content, 'text/html')
     expect(rendered.querySelector('strong')?.textContent).toBe('recorded Email body')
-  })
+  }, 15000)
 
   for (const entry of ['inline', 'attachment']) {
     it(`forwards a supplied uploader from the actual native Email ${entry} control`, async () => {
@@ -156,7 +161,11 @@ describe('native Email record-panel facade', () => {
         app.component(name, component)
       }
       app.mount(element)
-      await settle()
+      await vi.waitFor(() => {
+        expect(element.querySelector('[contenteditable="true"]')).not.toBeNull()
+        expect(editor.value?.editor?.commands?.dropFiles).toBeTypeOf('function')
+        expect(element.querySelector('input[type="file"]')).not.toBeNull()
+      }, { timeout: 10000 })
       const file = new File(['Synthetic selected bytes'], uploaded.file_name, { type: 'text/plain' })
       expect(element.querySelector('[contenteditable="true"]')).not.toBeNull()
       if (entry === 'inline') {
@@ -167,6 +176,11 @@ describe('native Email record-panel facade', () => {
         Object.defineProperty(input, 'files', { configurable: true, value: [file] })
         input.dispatchEvent(new Event('change', { bubbles: true }))
       }
+      await vi.waitFor(() => {
+        // Wait for either actual transport to finish before checking which
+        // public uploader the native control selected.
+        expect(uploadFunction.mock.calls.length + fixture.nativeUploads.length + fixture.xhrUploads.length).toBeGreaterThan(0)
+      }, { timeout: 10000 })
       await settle()
       expect(uploadFunction).toHaveBeenCalledExactlyOnceWith(file)
       expect(fixture.nativeUploads).toEqual([])
@@ -174,6 +188,6 @@ describe('native Email record-panel facade', () => {
       expect(content.value).toContain('native draft')
       if (entry === 'attachment') expect(attachments.value).toEqual([uploaded])
       else expect(content.value).toContain(uploaded.file_url)
-    })
+    }, 25000)
   }
 })
