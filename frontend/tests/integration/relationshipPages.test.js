@@ -94,7 +94,7 @@ vi.mock('frappe-ui', async (original) => {
       if (options.url === 'crm.fcrm.doctype.crm_call_log.crm_call_log.get_call_log') data = fixture.callLog
       if (options.url.includes('get_sidepanel_sections')) data = []
       if (options.url.includes('get_fields_layout')) data = [{name:'main',label:'',sections:[{name:'note',label:'',columns:[{name:'one',fields:[{fieldname:'title',fieldtype:'Data',label:'Title',visible:true},{fieldname:'content',fieldtype:'Text Editor',label:'Content',visible:true}]}]}]}]
-      return reactive({data, reload() {
+      return reactive({data, update(values) { Object.assign(options, values) }, fetch:async()=>data, reload() {
         if(options.url === 'crm.fcrm.doctype.crm_call_log.crm_call_log.get_call_log') fixture.callReload?.()
         if(options.url === 'crm.api.whatsapp.get_whatsapp_messages') fixture.whatsappReload?.()
       }, submit: async (params) => {
