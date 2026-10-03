@@ -159,6 +159,20 @@ async function open(Page, props) {
 }
 
 describe('existing native relationship pages',()=>{
+  it('forwards explicit native email reply capability through the actual Activities renderer', async () => {
+    const activity = {name:'Native Activity email',activity_type:'communication',owner:'another-author@example.test',creation:'2026-10-02 12:00:00.000001',communication_date:'2026-10-02 12:00:00.000001',data:{sender_full_name:'Native sender',sender:'sender@example.test',recipients:'recipient@example.test',subject:'Native recorded subject',content:'<p>Complete native <strong>recorded email</strong></p>',attachments:[]}}
+    fixture.rendererFactory = ui => ({props:['context'],setup(props){return () => ui.h(ui.native.Activities, {
+      doctype:props.context.doctype,docname:props.context.name,tabs:[{name:'Activity'}],
+      adapter:{doc:props.context.doc,actions:{},resource:{data:{versions:[activity],calls:[],notes:[],tasks:[],attachments:[]},reload(){}},getEmailProps:() => ({canReply:false})},
+    })}})
+    await open(Organization,{organizationId:'Native read-only Activity email parent'})
+    const card = element.querySelector('[id="Native Activity email"]')
+    expect(card).not.toBeNull()
+    expect(card.textContent).toContain('Native recorded subject')
+    expect(card.querySelector('strong')?.textContent).toBe('recorded email')
+    expect(card.querySelectorAll('button').length, 'An Activity email has no composer companion; authoritative canReply false must reach native EmailArea').toBe(0)
+  })
+
   it('forwards explicit native remark capabilities and actions through the actual Activities renderer', async () => {
     const activity = {name:'Native Activity manager remark',activity_type:'comment',owner:'another-author@example.test',creation:'2026-10-02 12:00:00.000001',modified:'2026-10-02 12:01:00.000001',content:'<p>Complete managed Activity remark</p>'}
     const deleteAction = vi.fn(async () => {})
