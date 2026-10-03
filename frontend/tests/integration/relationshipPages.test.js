@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createApp, h, reactive, nextTick, toRaw } from 'vue'
+import { createPinia } from 'pinia'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import { Button, Dialog, ErrorMessage, Badge, FormControl, TextInput, FeatherIcon } from 'frappe-ui'
 import Organization from '@/pages/Organization.vue'
@@ -146,6 +147,7 @@ async function open(Page, props) {
   await router.push('/');await router.isReady()
   element=document.createElement('div');document.body.append(element)
   app=createApp({render:()=>h('div',[h(Page,props),h(DoctypeModals),h(FieldLayoutDialogContainer)])})
+  app.use(createPinia())
   app.use(router)
   app.use(translationPlugin)
   for(const [name, component] of Object.entries({Button,Dialog,ErrorMessage,Badge,FormControl,TextInput,FeatherIcon,EmptyState,DeleteLinkedDocModal})) app.component(name,component)
@@ -153,6 +155,24 @@ async function open(Page, props) {
 }
 
 describe('existing native relationship pages',()=>{
+  it('renders real native remarks through the public record-panel component facade', async () => {
+    fixture.rendererFactory = ui => ({
+      props: ['context'],
+      setup() {
+        return () => ui.native.CommentArea
+          ? ui.h(ui.native.CommentArea, {activity: {
+            name: 'Native remark identity', owner: 'remark-author@example.test',
+            creation: '2026-10-02 12:00:00.000001', modified: '2026-10-02 12:00:00.000001',
+            content: '<p>Complete native <strong>internal remark</strong></p>',
+          }})
+          : ui.h('p', 'Native remark renderer unavailable')
+      },
+    })
+    await open(Organization, {organizationId: 'Native remarks parent'})
+    expect(element.textContent).toContain('Complete native internal remark')
+    expect(element.querySelector('[id="Native remark identity"] strong')?.textContent).toBe('internal remark')
+    expect(element.textContent).toContain('added a comment')
+  })
   it('exposes public typed realtime subscriptions without losing the panel room when native Activities unmounts', async () => {
     const listeners = new Map()
     fixture.socket = {
