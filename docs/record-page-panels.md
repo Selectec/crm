@@ -98,6 +98,18 @@ Apps must use these supplied runtimes
 and render functions rather than bundle a second Vue, Frappe UI or router. Native
 component/modal inputs are documented in [the native facade](relationship-activity-contract.md).
 
+### Native Sales timeline identities
+
+`crm.api.activities.get_activities(name)` retains its five native streams.
+Rows with `activity_type: 'communication'` expose the original Communication
+record's `name` at the outer activity level, alongside their existing native
+`data` projection. This applies to Lead, Deal and the Lead/Deal rows combined in a
+converted Deal's timeline. Existing `is_lead`, content, participants, attachments
+and ordering are retained. Consumers can identify the native record without
+matching bodies, subjects or addresses; this identity does not confer permission
+to read or change it. The native integration regression is
+`crm.tests.test_activities.TestActivityCommunicationIdentity`.
+
 ## Live context and lifecycle
 
 Factories receive only runtime, never a captured record. Components receive one
