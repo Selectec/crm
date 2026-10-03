@@ -157,3 +157,17 @@ card reload does not replace that loaded revision. Rejection keeps the native
 editor and unsent content open, does not emit `reload`, and restores the Save
 control. With no action, the original native `frappe.client.set_value` path is
 preserved. The current `canEdit` capability is checked again before saving.
+
+
+`native.CommentBox` retains the native rich editor, formatting/mention controls,
+content/attachment models, submit/discard controls and exposed `editor`. Its
+optional `uploadFunction(file, options)` is passed directly to the native media
+engine, including that engine's progress callback and AbortSignal, and is also
+used by the attachment chooser. The callback returns a native UploadedFile; the
+component retains prior attachments and the rich draft if a selection fails,
+shows the error, and restores the chooser. An app owns the callback's atomic
+source/context authorization and upload arguments. No callback preserves the
+stock native inline uploader and FileUploader unchanged. The already-working
+inline attribute fallthrough is now an explicit prop so the same public callback
+can also govern attachment selection; this introduces no alternative transport
+or File permission policy in CRM.

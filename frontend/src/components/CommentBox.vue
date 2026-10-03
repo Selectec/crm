@@ -5,7 +5,7 @@
     :extensions="extensions"
     :placeholder="placeholder"
     :editable="editable"
-    :upload-function="(file) => uploadFile(file, doctype, modelValue.name)"
+    :upload-function="uploadFunction || ((file) => uploadFile(file, doctype, modelValue.name))"
   >
     <div class="relative w-full">
       <EditorContent
@@ -32,11 +32,29 @@
             </template>
           </AttachmentItem>
         </div>
+        <ErrorMessage v-if="attachmentUploadError" class="px-4" :message="attachmentUploadError" />
         <div
           class="flex justify-between gap-2 overflow-hidden border-t px-4 py-2.5"
         >
           <div class="flex gap-1 items-center overflow-x-auto">
+            <template v-if="uploadFunction">
+              <input
+                ref="attachmentInput"
+                type="file"
+                class="hidden"
+                multiple
+                @change="uploadAttachments"
+              />
+              <Button
+                :tooltip="__('Attach a File')"
+                variant="ghost"
+                :icon="AttachmentIcon"
+                :loading="uploadingAttachment"
+                @click="attachmentInput.click()"
+              />
+            </template>
             <FileUploader
+              v-else
               :upload-args="{
                 doctype: doctype,
                 docname: modelValue.name,
@@ -93,7 +111,7 @@ import {
 import { submitShortcutLabel } from '@/utils'
 import { usersStore } from '@/stores/users'
 import { useTelemetry } from 'frappe-ui/frappe'
-import { FileUploader } from 'frappe-ui'
+import { ErrorMessage, FileUploader } from 'frappe-ui'
 import {
   Editor,
   EditorContent,
@@ -102,7 +120,8 @@ import {
 } from 'frappe-ui/editor'
 import { ref, computed } from 'vue'
 
-defineProps({
+const props = defineProps({
+  uploadFunction: { type: Function, default: null },
   placeholder: { type: String, default: null },
   editable: { type: Boolean, default: true },
   doctype: { type: String, default: 'CRM Lead' },
@@ -120,6 +139,27 @@ const content = defineModel('content', { type: String, default: '' })
 
 const { users: usersList } = usersStore()
 const { capture } = useTelemetry()
+
+const attachmentInput = ref(null)
+const uploadingAttachment = ref(false)
+const attachmentUploadError = ref('')
+
+async function uploadAttachments(event) {
+  const files = Array.from(event.target.files || [])
+  event.target.value = ''
+  if (!files.length || uploadingAttachment.value) return
+  uploadingAttachment.value = true
+  attachmentUploadError.value = ''
+  try {
+    for (const file of files) {
+      attachments.value.push(await props.uploadFunction(file))
+    }
+  } catch (error) {
+    attachmentUploadError.value = error?.message || __('Could not upload attachment')
+  } finally {
+    uploadingAttachment.value = false
+  }
+}
 
 const commentEditor = ref(null)
 const emoji = ref('')
