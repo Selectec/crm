@@ -278,7 +278,7 @@ async function uploadAttachments(event) {
       attachments.value.push(await props.uploadFunction(file))
     }
   } catch (error) {
-    attachmentUploadError.value = error.message || __('Could not upload attachment')
+    attachmentUploadError.value = error?.message || __('Could not upload attachment')
   } finally {
     uploadingAttachment.value = false
   }
