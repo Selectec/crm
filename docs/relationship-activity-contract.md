@@ -149,3 +149,11 @@ Call Details creation callbacks reload the native Call after linking the new sou
 They update onboarding only when its native UI has initialized steps; standalone
 mobile or contributed hosts do not need an onboarding instance to complete the
 source lifecycle. The normal initialized onboarding update remains unchanged.
+
+`CommentArea.saveAction(activity)` optionally replaces only the save transport.
+The supplied activity captures native source fields and `modified` when Edit
+begins, then substitutes the current rich content when Save is clicked. A live
+card reload does not replace that loaded revision. Rejection keeps the native
+editor and unsent content open, does not emit `reload`, and restores the Save
+control. With no action, the original native `frappe.client.set_value` path is
+preserved. The current `canEdit` capability is checked again before saving.

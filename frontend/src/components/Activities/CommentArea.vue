@@ -80,6 +80,7 @@ const props = defineProps({
   canEdit: { type: Boolean, default: undefined },
   canDelete: { type: Boolean, default: undefined },
   deleteAction: { type: Function, default: null },
+  saveAction: { type: Function, default: null },
 })
 
 const emit = defineEmits(['reload'])
@@ -93,6 +94,7 @@ const mayDelete = computed(() => props.canDelete ?? isOwner.value)
 const editing = ref(false)
 const saving = ref(false)
 const editContent = ref('')
+const editActivity = ref(null)
 const confirmingDelete = ref(false)
 
 const menuOptions = computed(() => [
@@ -115,6 +117,7 @@ const menuOptions = computed(() => [
 
 function startEdit() {
   if (!mayEdit.value) return
+  editActivity.value = { ...props.activity }
   editContent.value = props.activity.content || ''
   editing.value = true
 }
@@ -122,6 +125,7 @@ function startEdit() {
 function cancelEdit() {
   editing.value = false
   editContent.value = ''
+  editActivity.value = null
 }
 
 async function saveEdit() {
@@ -132,12 +136,19 @@ async function saveEdit() {
   }
   saving.value = true
   try {
-    await call('frappe.client.set_value', {
-      doctype: 'Comment',
-      name: props.activity.name,
-      fieldname: 'content',
-      value: editContent.value,
-    })
+    if (props.saveAction) {
+      await props.saveAction({
+        ...editActivity.value,
+        content: editContent.value,
+      })
+    } else {
+      await call('frappe.client.set_value', {
+        doctype: 'Comment',
+        name: props.activity.name,
+        fieldname: 'content',
+        value: editContent.value,
+      })
+    }
     editing.value = false
     emit('reload')
   } catch (e) {
