@@ -187,16 +187,20 @@ describe('existing native relationship pages',()=>{
     const card = element.querySelector('[id="Capability remark"]')
     const more = card.querySelector('button[aria-haspopup="menu"]')
     expect(more, 'A supplied delete capability must expose the native control for a non-owner').not.toBeNull()
-    more.click()
+    more.focus()
+    more.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true}))
     await settle()
-    let items = [...document.querySelectorAll('[role="menuitem"]')]
+    expect(more.getAttribute('aria-expanded'), 'The actual native menu trigger must open').toBe('true')
+    const menu = document.querySelector('[role="menu"]')
+    expect(menu, 'The native portalled menu must be present').not.toBeNull()
+    let items = [...menu.querySelectorAll('[role="menuitem"],button')]
     expect(items.some(item=>item.textContent.trim()==='Edit')).toBe(false)
     const remove = items.find(item=>item.textContent.trim()==='Delete')
     expect(remove, 'The native menu must expose Delete before confirmation').toBeDefined()
     remove.click()
     await settle()
     expect(deleteAction).not.toHaveBeenCalled()
-    items = [...document.querySelectorAll('[role="menuitem"]')]
+    items = [...menu.querySelectorAll('[role="menuitem"],button')]
     const confirm = items.find(item=>item.textContent.trim()==='Confirm Delete')
     expect(confirm, 'The native confirmation must appear without deleting immediately').toBeDefined()
     confirm.click()
