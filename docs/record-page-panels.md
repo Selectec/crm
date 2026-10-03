@@ -227,3 +227,11 @@ not prove network transport or a contributing app's public page refresh.
 The native `EmailEditor` accepts optional `uploadFunction(file, options?)` returning a native uploaded File. Native inline uploads supply optional cancellation/progress options. It forwards the callback to rich-editor inline uploads and the attachment control; upload failures retain the draft and display an attachment error. Without the callback, both existing native upload routes remain unchanged. The contributor must supply authorization and capture context before uploading.
 
 `EmailArea.canReply` defaults to true. A contributor may disable the native reply controls when no authorized companion composer is available; complete recorded message content and participants remain visible. Source read and send permissions stay application/server responsibilities.
+
+`EmailArea` emits optional `reply(email, replyAll)` after its existing native
+reply-editor population completes. `email` is the supplied native communication
+record; `replyAll` distinguishes the two existing controls. Contributors can
+retain the actual Communication identity for their send operation without
+replacing native recipient, subject or quoted-body behavior. No listener is
+required; the stock composer flow is unchanged. Event data grants no source or
+send permission, which must still be checked by the server.

@@ -86,6 +86,7 @@ const props = defineProps({
   emailBox: { type: Object, default: () => ({}) },
   canReply: { type: Boolean, default: true },
 })
+const emit = defineEmits(['reply'])
 
 const emailBox = reactive(props.emailBox)
 
@@ -136,6 +137,8 @@ function reply(email, reply_all = false) {
     .insertContentAt(0, { type: 'paragraph' })
     .focus('start')
     .run()
+
+  emit('reply', email, reply_all)
 }
 
 const status = computed(() => {
