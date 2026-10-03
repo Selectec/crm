@@ -68,61 +68,71 @@ async function settle() {
   }
 }
 
+function mockNativeXHR() {
+  class SyntheticXHR extends EventTarget {
+    static DONE = 4
+    upload = new EventTarget()
+    readyState = 0
+    status = 200
+    responseText = JSON.stringify({ message: uploaded })
+    open() {}
+    setRequestHeader() {}
+    send(body) {
+      fixture.xhrUploads.push(body)
+      this.readyState = SyntheticXHR.DONE
+      this.onreadystatechange?.()
+    }
+  }
+  vi.stubGlobal('XMLHttpRequest', SyntheticXHR)
+}
+
+async function mountComposer({ uploadFunction, doctype = 'CRM Lead', prior = [] } = {}) {
+  const editor = ref(null)
+  const content = ref('<p>Keep this <strong>native internal remark draft</strong>.</p>')
+  const attachments = ref([...prior])
+  element = document.createElement('div')
+  document.body.append(element)
+  app = createApp({ setup() {
+    const ui = useRecordPanelRuntime({ push() {} }, { on() {}, off() {}, emit() {} })
+    return () => h(ui.native.CommentBox, {
+      ref: editor, doctype,
+      modelValue: { name: 'Native Comment parent' },
+      content: content.value,
+      'onUpdate:content': value => { content.value = value },
+      attachments: attachments.value,
+      'onUpdate:attachments': value => { attachments.value = value },
+      uploadFunction,
+    })
+  } })
+  app.use(createPinia())
+  app.use(translationPlugin)
+  for (const [name, component] of Object.entries({ Badge, Button, Dialog, ErrorMessage, FeatherIcon, FormControl, TextInput })) app.component(name, component)
+  app.mount(element)
+  await vi.waitFor(() => {
+    expect(element.querySelector('[contenteditable="true"]')).not.toBeNull()
+    expect(editor.value?.editor?.commands?.dropFiles).toBeTypeOf('function')
+    expect(element.querySelector('input[type="file"]')).not.toBeNull()
+  }, { timeout: 10000 })
+  return { editor, content, attachments }
+}
+
+function selectAttachment(file) {
+  const input = element.querySelector('input[type="file"]')
+  Object.defineProperty(input, 'files', { configurable: true, value: [file] })
+  input.dispatchEvent(new Event('change', { bubbles: true }))
+}
+
 describe('native Comment record-panel upload contract', () => {
   for (const entry of ['inline', 'attachment']) {
     it(`forwards a supplied uploader from the actual native Comment ${entry} control`, async () => {
-      class SyntheticXHR extends EventTarget {
-        static DONE = 4
-        upload = new EventTarget()
-        readyState = 0
-        status = 200
-        responseText = JSON.stringify({ message: uploaded })
-        open() {}
-        setRequestHeader() {}
-        send(body) {
-          fixture.xhrUploads.push(body)
-          this.readyState = SyntheticXHR.DONE
-          this.onreadystatechange?.()
-        }
-      }
-      vi.stubGlobal('XMLHttpRequest', SyntheticXHR)
+      mockNativeXHR()
       const uploadFunction = vi.fn(async () => uploaded)
-      const editor = ref(null)
-      const content = ref('<p>Keep this <strong>native internal remark draft</strong>.</p>')
-      const attachments = ref([])
-      element = document.createElement('div')
-      document.body.append(element)
-      app = createApp({ setup() {
-        const ui = useRecordPanelRuntime({ push() {} }, { on() {}, off() {}, emit() {} })
-        return () => h(ui.native.CommentBox, {
-          ref: editor,
-          doctype: 'Contact',
-          modelValue: { name: 'Native Comment parent' },
-          content: content.value,
-          'onUpdate:content': value => { content.value = value },
-          attachments: attachments.value,
-          'onUpdate:attachments': value => { attachments.value = value },
-          uploadFunction,
-        })
-      } })
-      app.use(createPinia())
-      app.use(translationPlugin)
-      for (const [name, component] of Object.entries({ Badge, Button, Dialog, ErrorMessage, FeatherIcon, FormControl, TextInput })) app.component(name, component)
-      app.mount(element)
-      await vi.waitFor(() => {
-        expect(element.querySelector('[contenteditable="true"]')).not.toBeNull()
-        expect(editor.value?.editor?.commands?.dropFiles).toBeTypeOf('function')
-        expect(element.querySelector('input[type="file"]')).not.toBeNull()
-      }, { timeout: 10000 })
+      const { editor, content, attachments } = await mountComposer({ uploadFunction, doctype: 'Contact' })
       expect(element.textContent).toContain('Comment')
       expect(element.textContent).toContain('Discard')
       const file = new File(['Synthetic selected bytes'], uploaded.file_name, { type: 'text/plain' })
       if (entry === 'inline') expect(editor.value.editor.commands.dropFiles([file])).toBe(true)
-      else {
-        const input = element.querySelector('input[type="file"]')
-        Object.defineProperty(input, 'files', { configurable: true, value: [file] })
-        input.dispatchEvent(new Event('change', { bubbles: true }))
-      }
+      else selectAttachment(file)
       await vi.waitFor(() => {
         expect(uploadFunction.mock.calls.length + fixture.nativeUploads.length + fixture.xhrUploads.length).toBeGreaterThan(0)
       }, { timeout: 10000 })
@@ -138,6 +148,51 @@ describe('native Comment record-panel upload contract', () => {
       expect(content.value).toContain('native internal remark draft')
       if (entry === 'attachment') expect(attachments.value).toEqual([uploaded])
       else expect(content.value).toContain(uploaded.file_url)
+    }, 25000)
+  }
+
+  it('keeps the native draft and prior attachments after an empty rejection, then permits retry', async () => {
+    mockNativeXHR()
+    const prior = { ...uploaded, name: 'Earlier native File', file_url: '/private/files/earlier-native.txt' }
+    const uploadFunction = vi.fn().mockRejectedValueOnce(undefined).mockResolvedValueOnce(uploaded)
+    const { content, attachments } = await mountComposer({ uploadFunction, prior: [prior] })
+    const file = new File(['Synthetic selected bytes'], uploaded.file_name, { type: 'text/plain' })
+    selectAttachment(file)
+    await vi.waitFor(() => expect(element.textContent).toContain('Could not upload attachment'))
+    expect(attachments.value).toEqual([prior])
+    expect(content.value).toContain('native internal remark draft')
+    selectAttachment(file)
+    await vi.waitFor(() => expect(attachments.value).toEqual([prior, uploaded]))
+    expect(uploadFunction).toHaveBeenCalledTimes(2)
+    expect(element.textContent).not.toContain('Could not upload attachment')
+    expect(content.value).toContain('native internal remark draft')
+    expect(fixture.nativeUploads).toEqual([])
+    expect(fixture.xhrUploads).toEqual([])
+  }, 25000)
+
+  for (const [doctype, entry] of [['CRM Lead', 'inline'], ['CRM Deal', 'attachment']]) {
+    it(`retains the native private ${entry} upload for ordinary ${doctype} callers`, async () => {
+      mockNativeXHR()
+      const { editor, content, attachments } = await mountComposer({ doctype })
+      const file = new File(['Ordinary synthetic sales bytes'], uploaded.file_name, { type: 'text/plain' })
+      if (entry === 'inline') {
+        expect(editor.value.editor.commands.dropFiles([file])).toBe(true)
+        await vi.waitFor(() => expect(fixture.nativeUploads).toHaveLength(1))
+        expect(fixture.nativeUploads[0]).toEqual({ file, options: {
+          private: true, doctype, docname: 'Native Comment parent',
+        } })
+        expect(fixture.xhrUploads).toEqual([])
+      } else {
+        selectAttachment(file)
+        await vi.waitFor(() => expect(attachments.value).toEqual([uploaded]))
+        expect(fixture.xhrUploads).toHaveLength(1)
+        const body = fixture.xhrUploads[0]
+        expect(body.get('is_private')).toBe('1')
+        expect(body.get('doctype')).toBe(doctype)
+        expect(body.get('docname')).toBe('Native Comment parent')
+        expect(fixture.nativeUploads).toEqual([])
+      }
+      expect(content.value).toContain('native internal remark draft')
     }, 25000)
   }
 })
