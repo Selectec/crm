@@ -113,7 +113,7 @@ vi.mock('@/stores/settings', async () => {
   const settings = { brand: reactive({}), settings: ref({}), _settings: reactive({doc:{}}) }
   return { getSettings: () => settings }
 })
-vi.mock('@/stores/global', () => ({ globalStore: () => ({$socket:{on(){},off(){},emit(){}},$dialog(){},makeCall(){}}) }))
+vi.mock('@/stores/global', () => ({ globalStore: () => ({$socket:fixture.socket || {on(){},off(){},emit(){}},$dialog(){},makeCall(){}}) }))
 vi.mock('@/stores/users', () => ({ usersStore: () => ({isManager:()=>false,getUser:()=>({full_name:'Staff'})}) }))
 vi.mock('@/stores/statuses', () => ({ statusesStore: () => ({getDealStatus:()=>({})}) }))
 vi.mock('@/stores/organizations', () => ({ organizationsStore: () => ({getOrganization:()=>({})}) }))
@@ -140,7 +140,7 @@ vi.mock('@/components/DeleteLinkedDocModal.vue', () => ({default:{render:()=>nul
 
 let app, element
 async function settle() { for(let i=0;i<8;i++) { await nextTick(); await new Promise(resolve=>setTimeout(resolve,0)) } }
-afterEach(()=>{app?.unmount();element?.remove();document.body.innerHTML='';fixture.documents.clear();fixture.script=null;fixture.callLog=null;fixture.contributions=null;fixture.rendererFactory=null;fixture.discovery=null;fixture.loadFailure=null;fixture.rendererLoad=null;fixture.nativeControllers=false;fixture.controllerScript=null;fixture.controllerPause=null;fixture.enabled=true;useDoctypeModal().show.value=false;fieldLayoutDialogs.value=[];vi.unstubAllGlobals()})
+afterEach(()=>{app?.unmount();element?.remove();document.body.innerHTML='';fixture.documents.clear();fixture.script=null;fixture.callLog=null;fixture.contributions=null;fixture.rendererFactory=null;fixture.discovery=null;fixture.loadFailure=null;fixture.rendererLoad=null;fixture.nativeControllers=false;fixture.controllerScript=null;fixture.controllerPause=null;fixture.enabled=true;fixture.socket=null;useDoctypeModal().show.value=false;fieldLayoutDialogs.value=[];vi.unstubAllGlobals()})
 async function open(Page, props) {
   const router=createRouter({history:createMemoryHistory(),routes:[{path:'/',name:'Test',component:{render:()=>null}},{path:'/organizations',name:'Organizations',component:{render:()=>null}},{path:'/contacts',name:'Contacts',component:{render:()=>null}},{path:'/organizations/:organizationId',name:'Organization',component:{render:()=>null}},{path:'/contacts/:contactId',name:'Contact',component:{render:()=>null}}]})
   await router.push('/');await router.isReady()
@@ -153,6 +153,58 @@ async function open(Page, props) {
 }
 
 describe('existing native relationship pages',()=>{
+  it('exposes public typed realtime subscriptions without losing the panel room when native Activities unmounts', async () => {
+    const listeners = new Map()
+    fixture.socket = {
+      on: vi.fn((event, handler) => { if (!listeners.has(event)) listeners.set(event, new Set()); listeners.get(event).add(handler) }),
+      off: vi.fn((event, handler) => listeners.get(event)?.delete(handler)),
+      emit: vi.fn(),
+    }
+    let runtime, hideNative
+    fixture.rendererFactory = ui => {
+      runtime = ui
+      return { props:['context'], setup(props) {
+        const draft = ui.ref('')
+        const updates = ui.ref(0)
+        const nativeVisible = ui.ref(true)
+        hideNative = () => { nativeVisible.value = false }
+        if (ui.realtime) {
+          const stopRoom = ui.realtime.subscribeDocument(props.context.doctype, props.context.name)
+          const stopEvent = ui.realtime.on('example_record_changed', context => {
+            if (context.doctype === props.context.doctype && context.name === props.context.name) updates.value++
+          })
+          ui.onUnmounted(() => { stopEvent(); stopRoom() })
+        }
+        return () => ui.h('div', [
+          ui.h('textarea', {'aria-label':'Realtime draft', value:draft.value, onInput:event=>draft.value=event.target.value}),
+          ui.h('p', {'data-updates':true}, String(updates.value)),
+          nativeVisible.value ? ui.h(Activities, {
+            doctype:props.context.doctype, docname:props.context.name, tabs:[{name:'Activity'}],
+            adapter:{doc:props.context.doc,resource:{data:{versions:[],calls:[],notes:[],tasks:[],attachments:[]},reload(){}}},
+          }, {header:()=>null}) : null,
+        ])
+      } }
+    }
+    await open(Organization, {organizationId:'Public realtime record'})
+    expect(runtime.realtime).toMatchObject({on:expect.any(Function),off:expect.any(Function),subscribeDocument:expect.any(Function)})
+    expect(fixture.socket.emit.mock.calls.filter(([event])=>event==='doc_subscribe')).toEqual([['doc_subscribe','CRM Organization','Public realtime record']])
+    const draft = element.querySelector('textarea[aria-label="Realtime draft"]')
+    draft.value = 'Unsent native draft'
+    draft.dispatchEvent(new Event('input',{bubbles:true}))
+    for (const handler of listeners.get('example_record_changed')) handler({doctype:'Contact',name:'Public realtime record'})
+    await settle()
+    expect(element.querySelector('[data-updates]').textContent).toBe('0')
+    hideNative()
+    await settle()
+    expect(fixture.socket.emit.mock.calls.filter(([event])=>event==='doc_unsubscribe')).toEqual([])
+    for (const handler of listeners.get('example_record_changed')) handler({doctype:'CRM Organization',name:'Public realtime record'})
+    await settle()
+    expect(element.querySelector('[data-updates]').textContent).toBe('1')
+    expect(draft.value).toBe('Unsent native draft')
+    app.unmount(); app = null
+    expect(fixture.socket.emit.mock.calls.filter(([event])=>event==='doc_unsubscribe')).toEqual([['doc_unsubscribe','CRM Organization','Public realtime record']])
+    expect(listeners.get('example_record_changed').size).toBe(0)
+  })
   it('awaits native controller modal rights before exposing fields and honors read-only without changing the next stock editor', async () => {
     let resolveRights
     fixture.controllerRights = new Promise(resolve=>{resolveRights=resolve})
