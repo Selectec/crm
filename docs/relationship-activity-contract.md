@@ -89,9 +89,11 @@ native `activity.name` key. Keep the key stable when the same source's revision
 changes; new data must not discard its open editor.
 
 Native notification responses may optionally provide `route_params` alongside
-their existing `route_name` and `hash`. Notifications forwards those named-route
-parameters to the existing RouterLink; the owning application supplies the typed
-record identity. Without them, native Lead/Deal parameters remain unchanged.
+their existing `route_name` and source/hash fields. The desktop Notifications
+component and MobileNotification page forward those named-route parameters to
+their existing RouterLinks; the owning application supplies the typed record
+identity. Each renderer retains its native hash construction. Without explicit
+parameters, native Lead/Deal routes remain unchanged.
 
 `native.TaskArea` accepts optional `canDelete` and `canUpdateStatus` Booleans,
 both defaulting to true for existing callers. They independently hide the native
