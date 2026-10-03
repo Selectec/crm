@@ -88,6 +88,11 @@ card and unsent editor when rows reorder. Missing/nullish keys retain the ordina
 native `activity.name` key. Keep the key stable when the same source's revision
 changes; new data must not discard its open editor.
 
+Native notification responses may optionally provide `route_params` alongside
+their existing `route_name` and `hash`. Notifications forwards those named-route
+parameters to the existing RouterLink; the owning application supplies the typed
+record identity. Without them, native Lead/Deal parameters remain unchanged.
+
 `native.TaskArea` accepts optional `canDelete` and `canUpdateStatus` Booleans,
 both defaulting to true for existing callers. They independently hide the native
 delete or status controls; opening the complete Task still uses
