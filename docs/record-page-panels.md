@@ -236,6 +236,10 @@ permission-checked data. CRM supplies no business event or server permission
 policy. Replacing rows must preserve unsaved editor state; receiving an event
 does not authorize applying its content as a document update.
 
+Native Activities also removes only its own exact event callbacks on unmount,
+including its stock WhatsApp callback. Other simultaneous native or app
+consumers retain their subscriptions and existing native matching-record reloads.
+
 The actual Organization/RecordPagePanels/Activities component regression uses a
 controlled external socket transport and proves public subscriptions, exact typed
 event matching, shared room lifetime, cleanup and retained draft text. It does

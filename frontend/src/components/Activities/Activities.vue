@@ -610,21 +610,14 @@ watch([() => props.doctype, () => props.docname], ([doctype, name]) => {
   releaseDocumentRoom = doctype && name ? subscribeDocument($socket, doctype, name) : null
 }, { immediate: true })
 onBeforeUnmount(() => {
-  $socket.off('whatsapp_message')
+  $socket.off('whatsapp_message', handleWhatsappMessage)
   $socket.off('docinfo_update', handleDocinfoUpdate)
   releaseDocumentRoom?.()
 })
 
 onMounted(() => {
   $socket.on('docinfo_update', handleDocinfoUpdate)
-  $socket.on('whatsapp_message', (data) => {
-    if (
-      data.reference_doctype === props.doctype &&
-      data.reference_name === props.docname
-    ) {
-      whatsappMessages.reload()
-    }
-  })
+  $socket.on('whatsapp_message', handleWhatsappMessage)
 
   nextTick(() => {
     const hash = route.hash.slice(1) || null
@@ -634,6 +627,15 @@ onMounted(() => {
     }
   })
 })
+
+function handleWhatsappMessage(data) {
+  if (
+    data.reference_doctype === props.doctype &&
+    data.reference_name === props.docname
+  ) {
+    whatsappMessages.reload()
+  }
+}
 
 function handleDocinfoUpdate({ doc, key }) {
   if (key !== 'comments') return
