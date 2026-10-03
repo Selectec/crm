@@ -24,14 +24,26 @@ class TestNativeMentionTitles(unittest.TestCase):
 			("Contact", "Native full contact name", {}),
 			("CRM Organization", "Native organisation name", {}),
 			("CRM Lead", "Native lead name", {"lead_name": "Native lead name"}),
-			("CRM Deal", "Native organisation", {"organization": "Native organisation", "lead_name": "Lead fallback"}),
+			(
+				"CRM Deal",
+				"Native organisation",
+				{"organization": "Native organisation", "lead_name": "Lead fallback"},
+			),
 			("CRM Deal", "", {"organization": None, "lead_name": "Lead fallback"}),
 		]
 		for doctype, title, fields in cases:
 			with self.subTest(doctype=doctype, title=title):
-				parent = SimpleNamespace(name="Native parent", get_title=lambda: title, get=fields.get, **fields)
+				parent = SimpleNamespace(
+					name="Native parent", get_title=lambda: title, get=fields.get, **fields
+				)
 				content = '<p>Complete native mention <span data-type="mention" data-id="reader@example.test">Reader</span></p>'
-				comment = SimpleNamespace(name="Native remark", owner="author@example.test", reference_doctype=doctype, reference_name=parent.name, content=content)
+				comment = SimpleNamespace(
+					name="Native remark",
+					owner="author@example.test",
+					reference_doctype=doctype,
+					reference_name=parent.name,
+					content=content,
+				)
 				with (
 					patch.object(frappe, "get_doc", return_value=parent),
 					patch.object(frappe, "get_cached_value", return_value="Native author"),
@@ -43,6 +55,12 @@ class TestNativeMentionTitles(unittest.TestCase):
 				notification = notify.call_args.args[0]
 				self.assertEqual(notification["message"], content)
 				self.assertEqual(notification["assigned_to"], "reader@example.test")
-				self.assertEqual((notification["reference_doctype"], notification["reference_docname"]), ("Comment", comment.name))
-				self.assertEqual((notification["redirect_to_doctype"], notification["redirect_to_docname"]), (doctype, parent.name))
+				self.assertEqual(
+					(notification["reference_doctype"], notification["reference_docname"]),
+					("Comment", comment.name),
+				)
+				self.assertEqual(
+					(notification["redirect_to_doctype"], notification["redirect_to_docname"]),
+					(doctype, parent.name),
+				)
 				self.assertIn(title or "Lead fallback", notification["notification_text"])
