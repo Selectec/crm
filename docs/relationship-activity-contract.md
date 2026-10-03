@@ -12,6 +12,13 @@ Form Script actions/statuses and the native components below remain independent.
 
 ## Native rendering and editor inputs
 
+`native.CommentArea` renders the existing rich remark card. Optional `canEdit`
+and `canDelete` capabilities default to the native owner check when omitted.
+An optional `deleteAction(activity)` replaces only the deletion transport;
+the native two-step confirmation and successful `reload` event remain.
+Applications must derive these capabilities from authoritative source policy.
+Ordinary native callers retain their existing actions and permission checks.
+
 The owning application may render `native.Activities` with its existing
 `doctype`, `docname`, `tabs` and `tabIndex` inputs and an optional
 `adapter: { doc, resource, actions, reloadDoc, getCallEditorDefaults }`. Give each mounted renderer a

@@ -14,7 +14,7 @@
       <div class="ml-auto flex items-center gap-1 whitespace-nowrap">
         <TimelineTimestamp :date="activity.creation" />
         <Dropdown
-          v-if="isOwner && !editing"
+          v-if="(mayEdit || mayDelete) && !editing"
           :options="menuOptions"
           placement="right"
           @click="confirmingDelete = false"
@@ -76,6 +76,9 @@ import { computed, ref } from 'vue'
 
 const props = defineProps({
   activity: { type: Object, default: () => ({}) },
+  canEdit: { type: Boolean, default: undefined },
+  canDelete: { type: Boolean, default: undefined },
+  deleteAction: { type: Function, default: null },
 })
 
 const emit = defineEmits(['reload'])
@@ -83,6 +86,8 @@ const emit = defineEmits(['reload'])
 const { user } = sessionStore()
 
 const isOwner = computed(() => props.activity.owner === user)
+const mayEdit = computed(() => props.canEdit ?? isOwner.value)
+const mayDelete = computed(() => props.canDelete ?? isOwner.value)
 
 const editing = ref(false)
 const saving = ref(false)
@@ -90,18 +95,25 @@ const editContent = ref('')
 const confirmingDelete = ref(false)
 
 const menuOptions = computed(() => [
-  {
-    label: __('Edit'),
-    icon: 'edit-2',
-    onClick: startEdit,
-  },
-  ...ConfirmDelete({
-    onConfirmDelete: deleteComment,
-    isConfirmingDelete: confirmingDelete,
-  }),
+  ...(mayEdit.value
+    ? [
+        {
+          label: __('Edit'),
+          icon: 'edit-2',
+          onClick: startEdit,
+        },
+      ]
+    : []),
+  ...(mayDelete.value
+    ? ConfirmDelete({
+        onConfirmDelete: deleteComment,
+        isConfirmingDelete: confirmingDelete,
+      })
+    : []),
 ])
 
 function startEdit() {
+  if (!mayEdit.value) return
   editContent.value = props.activity.content || ''
   editing.value = true
 }
@@ -134,11 +146,16 @@ async function saveEdit() {
 }
 
 async function deleteComment() {
+  if (!mayDelete.value) return
   try {
-    await call('frappe.client.delete', {
-      doctype: 'Comment',
-      name: props.activity.name,
-    })
+    if (props.deleteAction) {
+      await props.deleteAction(props.activity)
+    } else {
+      await call('frappe.client.delete', {
+        doctype: 'Comment',
+        name: props.activity.name,
+      })
+    }
     emit('reload')
   } catch (e) {
     toast.error(__('Failed to delete comment'))
