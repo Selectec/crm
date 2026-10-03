@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Emitter } from '@socket.io/component-emitter'
-import { createApp, h, reactive, nextTick, toRaw } from 'vue'
+import { createApp, h, reactive, nextTick, toRaw, provide } from 'vue'
 import { createPinia } from 'pinia'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import { Button, Dialog, ErrorMessage, Badge, FormControl, TextInput, FeatherIcon } from 'frappe-ui'
@@ -174,7 +174,10 @@ describe('existing native relationship pages',()=>{
       doc:{doctype:props.doctype,name:props.docname},actions:{},
       resource:{data:{versions:[],calls:[],notes:[],tasks:[],attachments:[]},reload(){}},
     }
-    await open({render:()=>h(Activities, props, {composer:()=>null})}, {})
+    await open({setup(){
+      provide('session',{user:'native-socket-consumer@example.test'})
+      return ()=>h(Activities, props, {composer:()=>null})
+    }}, {})
     const request = fixture.requestOptions.findLast(options=>options.url==='crm.api.whatsapp.get_whatsapp_messages')
     const nativeReload = vi.fn()
     // The resource transport is controlled; the actual Activities lifecycle
