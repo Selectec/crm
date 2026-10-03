@@ -128,7 +128,7 @@
       <template v-else>
         <div
           v-for="(activity, i) in activities"
-          :key="activity.name"
+          :key="adapter?.getActivityKey?.(activity) ?? activity.name"
           class="activity px-3 sm:px-10"
           :class="
             ['Activity', 'Emails'].includes(title)
@@ -195,7 +195,11 @@
             v-if="activity.activity_type == 'communication'"
             class="pb-5 mt-px"
           >
-            <EmailArea :activity="activity" :emailBox="emailBox" />
+            <EmailArea
+              v-bind="adapter?.getEmailProps?.(activity) || {}"
+              :activity="activity"
+              :emailBox="emailBox"
+            />
           </div>
           <div
             v-else-if="activity.activity_type == 'comment'"

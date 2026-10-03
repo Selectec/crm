@@ -159,6 +159,55 @@ async function open(Page, props) {
 }
 
 describe('existing native relationship pages',()=>{
+  it('keeps typed mixed Activity identities and an unsent native remark draft when equal names reorder', async () => {
+    const name = 'Equal native mixed source identity'
+    const comment = {doctype:'Comment',name,activity_type:'comment',owner:'another-author@example.test',creation:'2026-10-02 12:00:00.000001',modified:'2026-10-02 12:00:00.000001',content:'<p>Originally loaded native remark</p>'}
+    const email = {doctype:'Communication',name,activity_type:'communication',owner:'another-author@example.test',creation:'2026-10-02 12:01:00.000001',communication_date:'2026-10-02 12:01:00.000001',data:{sender_full_name:'Native sender',sender:'sender@example.test',recipients:'recipient@example.test',subject:'Same-id native recorded email',content:'<p>Same-id full native email</p>',attachments:[]}}
+    const version = {doctype:'Version',name,activity_type:'changed',owner:'another-author@example.test',creation:'2026-10-02 12:02:00.000001',data:{field:'full_name',field_label:'Full Name',old_value:'Before',value:'After'}}
+    let reorder
+    fixture.rendererFactory = ui => ({props:['context'],setup(props){
+      const events = ui.ref([comment,email,version])
+      reorder = () => { events.value = [{...version,creation:'2026-10-02 12:00:00.000001'},email,{...comment,creation:'2026-10-02 12:02:00.000001'}] }
+      return () => ui.h(ui.native.Activities, {
+        doctype:props.context.doctype,docname:props.context.name,tabs:[{name:'Activity'}],
+        adapter:{doc:props.context.doc,actions:{},resource:{get data(){return {versions:events.value,calls:[],notes:[],tasks:[],attachments:[]}},reload(){}},getCommentProps:()=>({canEdit:true,canDelete:false}),getEmailProps:()=>({canReply:false}),getActivityKey:activity=>JSON.stringify([activity.doctype,activity.name])},
+      })
+    }})
+    await open(Organization,{organizationId:'Native typed Activity collision parent'})
+    const original = element.querySelector(`[id="${name}"] [id="${name}"]`)
+    expect(original.textContent).toContain('Originally loaded native remark')
+    const more = original.querySelector('button[aria-haspopup="menu"]')
+    more.focus();more.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true}));await settle()
+    const edit = [...document.querySelector('[role="menu"]').querySelectorAll('[role="menuitem"],button')].find(item=>item.textContent.trim()==='Edit')
+    expect(edit).toBeDefined();edit.click();await settle()
+    const editor = original.querySelector('[contenteditable="true"]')
+    expect(editor).not.toBeNull()
+    editor.innerHTML='<p>Keep this unsent typed native remark draft</p>'
+    editor.dispatchEvent(new Event('input',{bubbles:true}));await settle()
+    reorder();await settle()
+    expect(original.isConnected,'Native records with equal names need typed keys so a reordered sibling cannot replace this editor').toBe(true)
+    expect(original.querySelector('[contenteditable="true"]')?.textContent).toBe('Keep this unsent typed native remark draft')
+    expect(element.textContent).toContain('Same-id native recorded email')
+    expect(element.textContent).toContain('Full Name')
+  })
+
+  it('forwards explicit native email reply capability through the actual Activities renderer', async () => {
+    const activity = {name:'Native Activity email',activity_type:'communication',owner:'another-author@example.test',creation:'2026-10-02 12:00:00.000001',communication_date:'2026-10-02 12:00:00.000001',data:{sender_full_name:'Native sender',sender:'sender@example.test',recipients:'recipient@example.test',subject:'Native recorded subject',content:'<p>Complete native <strong>recorded email</strong></p>',attachments:[]}}
+    fixture.rendererFactory = ui => ({props:['context'],setup(props){return () => ui.h(ui.native.Activities, {
+      doctype:props.context.doctype,docname:props.context.name,tabs:[{name:'Activity'}],
+      adapter:{doc:props.context.doc,actions:{},resource:{data:{versions:[activity],calls:[],notes:[],tasks:[],attachments:[]},reload(){}},getEmailProps:() => ({canReply:false})},
+    })}})
+    await open(Organization,{organizationId:'Native read-only Activity email parent'})
+    // Native EmailArea has no record-id wrapper; scope its real Activity row
+    // through the displayed body, preserving the renderer's existing markup.
+    const card = [...element.querySelectorAll('.activity')].find(row => row.textContent.includes('Native recorded subject'))
+    expect(card).not.toBeNull()
+    expect(card.textContent).toContain('Native recorded subject')
+    // Native EmailContent intentionally isolates the full rich body in srcdoc.
+    expect(card.querySelector('iframe')?.srcdoc).toContain('<strong>recorded email</strong>')
+    expect(card.querySelectorAll('button').length, 'An Activity email has no composer companion; authoritative canReply false must reach native EmailArea').toBe(0)
+  })
+
   it('forwards explicit native remark capabilities and actions through the actual Activities renderer', async () => {
     const activity = {name:'Native Activity manager remark',activity_type:'comment',owner:'another-author@example.test',creation:'2026-10-02 12:00:00.000001',modified:'2026-10-02 12:01:00.000001',content:'<p>Complete managed Activity remark</p>'}
     const deleteAction = vi.fn(async () => {})

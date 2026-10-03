@@ -75,6 +75,19 @@ source capabilities and actions; CRM forwards them to the existing native card.
 The `activity` prop always remains the rendered native record. Without the
 callback, ordinary native owner controls and native save/delete behavior remain.
 
+`adapter.getEmailProps(email)` forwards public native EmailArea props. For an
+application rendering a read-only recorded stream without a companion composer,
+it can provide `canReply: false` while retaining the full native message body and
+participants. The native activity and companion props remain host-owned. Missing
+callbacks preserve ordinary native Reply behavior.
+
+`adapter.getActivityKey(activity)` optionally supplies a stable native-renderer
+key for mixed sources. Names from distinct native tables may be equal; an owning
+application can return its complete DocType/name identity to preserve the correct
+card and unsent editor when rows reorder. Missing/nullish keys retain the ordinary
+native `activity.name` key. Keep the key stable when the same source's revision
+changes; new data must not discard its open editor.
+
 `native.TaskArea` accepts optional `canDelete` and `canUpdateStatus` Booleans,
 both defaulting to true for existing callers. They independently hide the native
 delete or status controls; opening the complete Task still uses
