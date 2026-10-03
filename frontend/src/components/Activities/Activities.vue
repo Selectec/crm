@@ -195,7 +195,11 @@
             v-if="activity.activity_type == 'communication'"
             class="pb-5 mt-px"
           >
-            <EmailArea :activity="activity" :emailBox="emailBox" />
+            <EmailArea
+              v-bind="adapter?.getEmailProps?.(activity) || {}"
+              :activity="activity"
+              :emailBox="emailBox"
+            />
           </div>
           <div
             v-else-if="activity.activity_type == 'comment'"
