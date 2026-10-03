@@ -241,6 +241,8 @@ describe('existing native relationship pages',()=>{
     expect(save).toBeDefined()
     save.click()
     await settle()
+    expect(save.disabled).toBe(true)
+    expect(card.querySelector('[contenteditable="true"]')).toBeNull()
     expect(fixture.commentWrites).toEqual([])
     expect(reload).not.toHaveBeenCalled()
     expect(card.textContent).toContain('Unsent retained native draft')

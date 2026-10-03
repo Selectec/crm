@@ -33,7 +33,7 @@
       <template v-if="editing">
         <TextEditor
           :content="editContent"
-          :editable="true"
+          :editable="mayEdit"
           :editor-class="['prose-sm max-w-none min-h-[3rem]']"
           @change="editContent = $event"
         />
@@ -43,6 +43,7 @@
             variant="solid"
             :label="__('Save')"
             :loading="saving"
+            :disabled="!mayEdit"
             @click="saveEdit"
           />
         </div>
@@ -124,6 +125,7 @@ function cancelEdit() {
 }
 
 async function saveEdit() {
+  if (!mayEdit.value) return
   if (editContent.value === props.activity.content) {
     editing.value = false
     return
