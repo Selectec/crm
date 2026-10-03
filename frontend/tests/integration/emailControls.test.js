@@ -118,7 +118,7 @@ describe('native Email record-panel facade', () => {
     expect(rendered.querySelector('strong')?.textContent).toBe('recorded Email body')
   }, 15000)
 
-  for (const entry of ['inline', 'attachment']) {
+  for (const entry of ['inline', 'attachment', 'attachment failure']) {
     it(`forwards a supplied uploader from the actual native Email ${entry} control`, async () => {
       class SyntheticXHR extends EventTarget {
         static DONE = 4
@@ -135,10 +135,13 @@ describe('native Email record-panel facade', () => {
         }
       }
       vi.stubGlobal('XMLHttpRequest', SyntheticXHR)
+      const failure = entry === 'attachment failure'
       const uploadFunction = vi.fn(async () => uploaded)
+      if (failure) uploadFunction.mockRejectedValueOnce(undefined)
       const editor = ref(null)
       const content = ref('<p>Keep this <strong>native draft</strong>.</p>')
-      const attachments = ref([])
+      const prior = { name: 'Prior native attachment', file_name: 'prior.txt', file_url: '/private/files/prior.txt' }
+      const attachments = ref(failure ? [prior] : [])
       element = document.createElement('div')
       document.body.append(element)
       app = createApp({ setup() {
@@ -192,7 +195,15 @@ describe('native Email record-panel facade', () => {
       expect(fixture.nativeUploads).toEqual([])
       expect(fixture.xhrUploads).toEqual([])
       expect(content.value).toContain('native draft')
-      if (entry === 'attachment') expect(attachments.value).toEqual([uploaded])
+      if (failure) {
+        expect(element.textContent).toContain('Could not upload attachment')
+        expect(attachments.value).toEqual([prior])
+        // A second native selection proves the busy state resets after failure.
+        const input = element.querySelector('input[type="file"]')
+        input.dispatchEvent(new Event('change', { bubbles: true }))
+        await vi.waitFor(() => expect(attachments.value).toEqual([prior, uploaded]))
+        expect(uploadFunction).toHaveBeenCalledTimes(2)
+      } else if (entry === 'attachment') expect(attachments.value).toEqual([uploaded])
       else expect(content.value).toContain(uploaded.file_url)
     }, 25000)
   }
