@@ -1,4 +1,4 @@
-"""Installed-app declarations for the Organisation and Contact record pages."""
+"""Read-authorized installed-app declarations for finite native record hosts."""
 
 import hashlib
 import re
@@ -7,7 +7,7 @@ from urllib.parse import unquote, urlsplit
 import frappe
 from frappe.utils import get_assets_json
 
-TARGETS = frozenset({"CRM Organization", "Contact"})
+TARGETS = frozenset({"CRM Organization", "Contact", "CRM Lead", "CRM Deal"})
 IDENTIFIER = re.compile(r"^[A-Za-z][A-Za-z0-9_\-]*$")
 
 

@@ -3,7 +3,8 @@
 CRM Organization and Contact desktop/mobile pages accept declarative installed-app
 panels. CRM discovers declarations, validates asset ownership, loads normal native
 IIFE bundles and retains each renderer group. Apps own business requests, source
-permissions and content. Lead and Deal hosts are unchanged. There is no generic
+permissions and content. Lead and Deal retain their existing native panes and
+can open an explicitly declared renderer through a Form Script dialog action. There is no generic
 business API dispatcher, executable Form Script registration or extra boot hook.
 
 ## Declaration and discovery
@@ -28,6 +29,10 @@ Identifiers are plain alphanumeric/underscore/hyphen names starting with a lette
 Contribution keys are `owner_app:id`; panel names are `owner_app:id:panel_id`.
 Native panes use reserved `native:*` names; labels never decide dispatch. A panel
 can share a label with a native pane or another contributor without shadowing it.
+
+Discovery accepts the finite native Organisation, Contact, Lead and Deal types.
+Sales declarations do not add tabs to the native Lead/Deal page: their renderer
+is loaded only when a supported Form Script dialog action requests its key.
 Optional lucide string icons render through CRM's native SVG Icon sprite; native
 component icons retain their existing path.
 
@@ -235,3 +240,52 @@ retain the actual Communication identity for their send operation without
 replacing native recipient, subject or quoted-body behavior. No listener is
 required; the stock composer flow is unchanged. Event data grants no source or
 send permission, which must still be checked by the server.
+
+## Registered renderer dialogs from Sales Form Scripts
+
+`this.recordPanelDialog({key, panel})` opens an installed-app renderer in the
+existing `GlobalModals` lifetime and native Frappe UI `Dialog`. It binds the
+controller's saved Lead/Deal identity, requires native parent read through
+`get_panels`, and selects an exact owner-qualified contribution and its local
+panel. Callers cannot supply an arbitrary component, asset, record or factory.
+The existing metadata-only `formDialog` and stock Sales composer remain unchanged.
+
+```javascript
+class CRMDeal {
+  async compose_with_context() {
+    const handle = await this.recordPanelDialog({
+      key: 'demo:composer', panel: 'Compose',
+    })
+    await handle.component.newEmail()
+  }
+}
+```
+
+The app declares the renderer with the same validated installed-app hook and
+normal IIFE bundle contract, targeting `CRM Lead`/`CRM Deal`. Use a separate
+bundle if another target's descriptor does not approve this renderer; the loader
+continues to reject undeclared registrations. Dialog approvals have distinct
+owners and do not replace page approvals. Closing removes only that dialog's
+approval and releases its native runtime listeners. Failed discovery or assets
+reject the helper without granting an undeclared factory.
+
+The returned `component` is Vue's public exposed renderer API. Apps should
+explicitly expose the small callable interface they support, such as `newEmail`;
+CRM does not inspect their private state. `handle.close()` returns a Promise of
+true when the dialog closes or false when a registered close guard refuses.
+Native Escape/close controls use the same guard and retain the exact mounted
+renderer, including its draft. The component receives the normal typed context
+plus `presentation: 'dialog'` and `registerCloseGuard(callback)`, which returns a
+guard-removal function. A guard may be asynchronous. Apps must guard pending
+uploads, in-flight actions and unresolved admission/retry state before allowing
+the host to discard their composer. `refreshRecord()` uses the original native
+resource's public reload; it does not infer or rewrite attribution.
+
+This extension fills the demonstrated gap between a supported Sales Form Script
+action and a rich installed-app renderer. A field-layout dialog hosts DocFields,
+not the native composer. There is no second Vue app or editor/transport in the
+host. Upgrade checks cover `script.js` helper binding, `GlobalModals` lifetime,
+native Dialog controlled-close behavior, parent discovery and scoped registry
+approval. Mounted contracts verify the stock field dialog, public exposure,
+guarded close and denial-before-assets; actual site permissions and app
+admission remain separately required before release.

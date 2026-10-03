@@ -20,6 +20,11 @@
 8. [Available Helpers](#available-helpers)
 9. [Testing](#testing)
 
+The optional Sales helper `this.recordPanelDialog({key, panel})` hosts an exact
+installed-app declaration in a native dialog and returns only its Vue-exposed
+API plus guarded `close()`. It binds the current saved Lead/Deal and checks native
+parent read before loading assets. See [the registry dialog contract](../docs/record-page-panels.md#registered-renderer-dialogs-from-sales-form-scripts).
+
 ---
 
 ## Form Script Class Contract

@@ -17,9 +17,11 @@
   />
   <AboutModal v-model="showAboutModal" />
   <FieldLayoutDialogContainer />
+  <RecordPanelDialogContainer />
 </template>
 <script setup>
 import FieldLayoutDialogContainer from '@/components/Modals/FieldLayoutDialogContainer.vue'
+import RecordPanelDialogContainer from '@/components/Modals/RecordPanelDialogContainer.vue'
 import ChangePasswordModal from '@/components/Modals/ChangePasswordModal.vue'
 import CreateDocumentModal from '@/components/Modals/CreateDocumentModal.vue'
 import QuickEntryModal from '@/components/Modals/QuickEntryModal.vue'

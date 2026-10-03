@@ -1,6 +1,7 @@
 /** Load declared native IIFE bundles into the hosting CRM runtime. Installed apps are trusted. */
 export function createPanelRegistry(browser = window) {
   const approved = new Map()
+  const owners = new Map()
   const factories = new Map()
   const loads = new Map()
   const registrationErrors = new Map()
@@ -46,9 +47,19 @@ export function createPanelRegistry(browser = window) {
     return promise
   }
   return {
-    approve(descriptors) {
+    approve(descriptors, scope = 'record-page') {
+      owners.set(scope, descriptors)
       approved.clear()
-      for (const descriptor of descriptors) approved.set(rendererKey(descriptor), descriptor)
+      for (const declarations of owners.values()) {
+        for (const descriptor of declarations) approved.set(rendererKey(descriptor), descriptor)
+      }
+    },
+    release(scope) {
+      owners.delete(scope)
+      approved.clear()
+      for (const declarations of owners.values()) {
+        for (const descriptor of declarations) approved.set(rendererKey(descriptor), descriptor)
+      }
     },
     async load(descriptor) {
       const key = rendererKey(descriptor)

@@ -2,6 +2,7 @@ import { globalStore } from '@/stores/global'
 import { getMeta } from '@/stores/meta'
 import { getClassNames, createDocProxy } from '@/utils/scriptHelpers'
 import { renderFieldLayoutDialog } from '@/utils/renderFieldLayoutDialog'
+import { renderRecordPanelDialog } from '@/utils/renderRecordPanelDialog'
 import { call, createListResource, toast } from 'frappe-ui'
 import { reactive } from 'vue'
 import router from '@/router'
@@ -73,6 +74,7 @@ export function getScript(doctype, view = 'Form') {
     helpers.router = router
     helpers.call = call
     helpers.formDialog = renderFieldLayoutDialog
+    helpers.recordPanelDialog = options => renderRecordPanelDialog(options, document)
 
     helpers.throwError = (message) => {
       toast.error(message || __('An error occurred'))
