@@ -463,6 +463,7 @@
   />
 </template>
 <script setup>
+import { subscribeDocument } from '@/utils/recordRealtime'
 import ActivityHeader from '@/components/Activities/ActivityHeader.vue'
 import EmailArea from '@/components/Activities/EmailArea.vue'
 import CommentArea from '@/components/Activities/CommentArea.vue'
@@ -597,14 +598,18 @@ watch(
   { immediate: true },
 )
 
+let releaseDocumentRoom
+watch([() => props.doctype, () => props.docname], ([doctype, name]) => {
+  releaseDocumentRoom?.()
+  releaseDocumentRoom = doctype && name ? subscribeDocument($socket, doctype, name) : null
+}, { immediate: true })
 onBeforeUnmount(() => {
   $socket.off('whatsapp_message')
   $socket.off('docinfo_update', handleDocinfoUpdate)
-  $socket.emit('doc_unsubscribe', props.doctype, props.docname)
+  releaseDocumentRoom?.()
 })
 
 onMounted(() => {
-  $socket.emit('doc_subscribe', props.doctype, props.docname)
   $socket.on('docinfo_update', handleDocinfoUpdate)
   $socket.on('whatsapp_message', (data) => {
     if (

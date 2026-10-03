@@ -196,3 +196,25 @@ lifecycle, four host templates and native facade/editor/adapter inputs. No upstr
 PR implementation is imported. Keep immutable dependency pins and rerun the same
 contracts on upgrades. Root-owned packaging/browser artifacts must be cleaned or
 retained with explicit ownership and a removal trigger after runtime proof.
+
+### Realtime capability
+
+The public panel runtime supplies `realtime.on(event, callback)`,
+`realtime.off(event, callback)` and `realtime.subscribeDocument(doctype, name)`.
+`on` and `subscribeDocument` return idempotent cleanup functions. An app must clean
+them up when its contributor unmounts or its typed record changes; the native
+host also cleans remaining registrations when the page unmounts. `off` removes
+only this runtime's exact callback. There is no arbitrary socket emit capability.
+
+Document rooms use native permission-checked `doc_subscribe`/`doc_unsubscribe`.
+Ownership is counted across panels and native Activities, so unmounting one
+consumer retains another consumer's subscription. Active rooms are rejoined on
+connection recovery. The app owns event names, payload validation and fetching
+permission-checked data. CRM supplies no business event or server permission
+policy. Replacing rows must preserve unsaved editor state; receiving an event
+does not authorize applying its content as a document update.
+
+The actual Organization/RecordPagePanels/Activities component regression uses a
+controlled external socket transport and proves public subscriptions, exact typed
+event matching, shared room lifetime, cleanup and retained draft text. It does
+not prove network transport or a contributing app's public page refresh.

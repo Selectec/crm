@@ -12,7 +12,7 @@ export function useRecordPagePanels({ record, scripts, nativeTabs, context }) {
   const tabIndex = ref(0)
   const hostId = useId()
   const triggerId = name => `crm-panel-trigger-${hostId}-${encodeURIComponent(name)}`
-  const ui = useRecordPanelRuntime(context.router)
+  const ui = useRecordPanelRuntime(context.router, context.$socket)
   const runtime = Object.freeze(ui)
   const registry = getPanelRegistry()
   const tabs = computed(() => [...groups.value.flatMap(group => group.descriptor.panels), ...nativeTabs])
