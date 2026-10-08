@@ -324,3 +324,22 @@ closed-Note reload after deletion without suppressing a live editor's error.
 Mounted native modal/resource checks cover closing, reopening, simultaneous
 owners, typed updates, reconnect and retained active fetch errors. Actual Socket
 delivery and browser editor journeys remain separate acceptance checks.
+
+## Native Link footer focus
+
+The shared native Link control keeps Search focused during mouse-down on Create
+New and Clear, then delegates the ordinary click to its existing creation or
+clear callback. Footer buttons are outside Headless UI's ComboboxOptions; allowing
+mouse-down to move focus there commits the active result on input blur and closes
+the popup before click. This can overwrite a selected Link and prevent inline
+creation while a text query is pending. The guard applies to all native Link
+footer callers, including stock CRM fields; option selection and keyboard
+selection retain their native handlers. No creation API or query response is
+replaced.
+
+Selectec owns this adaptation and its native-component regression in
+`frontend/tests/integration/linkFooter.test.js`. Upgrade review must preserve the
+footer action and selected value with populated/pending results, plus ordinary
+mouse and keyboard selection. Retire the guard when a compatible upstream Link
+implementation preserves those behaviours. Wyatt issue #213 records the real
+browser reproduction and draft/association checks.

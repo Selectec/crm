@@ -43,7 +43,8 @@
       </template>
 
       <template #footer="{ value: v, close }">
-        <div v-if="attrs.onCreate">
+        <!-- Footer actions must run before ComboboxInput blur commits an active result. -->
+        <div v-if="attrs.onCreate" @mousedown.prevent>
           <Button
             variant="ghost"
             class="w-full !justify-start"
@@ -52,7 +53,7 @@
             @click="() => attrs.onCreate(v, close)"
           />
         </div>
-        <div>
+        <div @mousedown.prevent>
           <Button
             variant="ghost"
             class="w-full !justify-start"
