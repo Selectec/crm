@@ -159,7 +159,7 @@ describe('native Email record-panel facade', () => {
       for (const method of ['clearContent', 'updateAttributes', 'insertContent', 'focus', 'insertContentAt', 'run']) {
         chain[method] = vi.fn((...args) => { operations.push({ method, args }); return chain })
       }
-      const emailBox = { show: false, editor: { editor: { chain: () => chain } } }
+      const emailBox = { show: false, openEmailBox() { this.show = true }, editor: { editor: { chain: () => chain } } }
       const onReply = vi.fn(() => {
         expect(emailBox.show).toBe(true)
         expect(emailBox.editor.subject).toBe(`Re: ${email.subject}`)
@@ -182,7 +182,7 @@ describe('native Email record-panel facade', () => {
       await vi.waitFor(() => expect(element.querySelectorAll('button')).toHaveLength(2), { timeout: 10000 })
       element.querySelectorAll('button')[replyAll ? 1 : 0].click()
       await nextTick()
-      expect(emailBox.editor.fromEmail).toBe(email.sender)
+      expect(emailBox.editor.replyAddresses).toEqual([email.sender, email.recipients, email.cc, email.bcc])
       expect(emailBox.editor.toEmails).toEqual([email.sender])
       expect(emailBox.editor.ccEmails).toEqual(replyAll ? [email.cc, email.recipients] : [])
       expect(emailBox.editor.bccEmails).toEqual(replyAll ? [email.bcc] : [])
@@ -196,7 +196,7 @@ describe('native Email record-panel facade', () => {
     for (const method of ['clearContent', 'updateAttributes', 'insertContent', 'focus', 'insertContentAt', 'run']) {
       chain[method] = vi.fn(() => chain)
     }
-    const emailBox = { show: false, editor: { editor: { chain: () => chain } } }
+    const emailBox = { show: false, openEmailBox() { this.show = true }, editor: { editor: { chain: () => chain } } }
     element = document.createElement('div')
     document.body.append(element)
     app = createApp({ setup() {

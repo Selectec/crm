@@ -355,6 +355,9 @@ def get_data(
 		if group_by_field and group_by_field not in rows:
 			rows.append(group_by_field)
 
+		if meta.track_seen and "_seen" not in rows:
+			rows.append("_seen")
+
 		data = (
 			frappe.get_list(
 				doctype,
@@ -406,14 +409,11 @@ def get_data(
 				column_data = []
 			else:
 				column_filters.update(filters.copy())
-				page_length = 20
-
-				if kc.get("page_length"):
-					page_length = kc.get("page_length")
+				column_page_length = kc.get("page_length", 20)
 
 				if order:
 					column_data = get_records_based_on_order(
-						doctype, rows, column_filters, page_length, order
+						doctype, rows, column_filters, column_page_length, order
 					)
 				else:
 					column_data = frappe.get_list(
@@ -421,7 +421,7 @@ def get_data(
 						fields=rows,
 						filters=convert_filter_to_tuple(doctype, column_filters),
 						order_by=order_by,
-						page_length=page_length,
+						page_length=column_page_length,
 					)
 
 				new_filters = filters.copy()
@@ -602,6 +602,13 @@ def remove_assignments(doctype: str, name: str, assignees: str | list, ignore_pe
 			status="Cancelled",
 			ignore_permissions=ignore_permissions,
 		)
+
+
+@frappe.whitelist()
+def add_seen(doctype: str, name: str):
+	doc = frappe.get_doc(doctype, name)
+	doc.check_permission("read")
+	doc.add_seen()
 
 
 @frappe.whitelist()

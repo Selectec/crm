@@ -31,7 +31,11 @@
               ]"
             >
               <template #default>
-                <Button variant="ghost" icon="lucide-more-horizontal" />
+                <Button
+                  variant="ghost"
+                  icon="lucide-more-horizontal"
+                  :disabled="!callLog?.data"
+                />
               </template>
             </Dropdown>
             <Button
@@ -211,12 +215,21 @@ const task = ref('')
 // of a dead 0:00 player
 const recordingError = ref(false)
 
+function referenceDefaults() {
+  const data = callLog.value?.data
+  if (data?._lead)
+    return { reference_doctype: 'CRM Lead', reference_docname: data._lead }
+  if (data?._deal)
+    return { reference_doctype: 'CRM Deal', reference_docname: data._deal }
+  return {}
+}
+
 function showNote(name) {
   showModal({
     name,
     doctype: 'FCRM Note',
     title: 'Note',
-    defaults: name ? {} : { ...props.editorDefaults },
+    defaults: name ? {} : { ...referenceDefaults(), ...props.editorDefaults },
     callbacks: {
       afterInsert: (d) => addNoteToCallLog(d, true),
       afterUpdate: (d) => addNoteToCallLog(d, false),
@@ -229,11 +242,9 @@ function showTask(name) {
     name,
     doctype: 'CRM Task',
     title: 'Task',
-    defaults: {
-      status: 'Backlog',
-      priority: 'Low',
-      ...(!name ? props.editorDefaults : {}),
-    },
+    defaults: name
+      ? {}
+      : { status: 'Backlog', priority: 'Low', ...referenceDefaults(), ...props.editorDefaults },
     callbacks: {
       afterInsert: (d) => addTaskToCallLog(d, true),
       afterUpdate: (d) => addTaskToCallLog(d, false),

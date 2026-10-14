@@ -65,6 +65,7 @@ vi.mock('@/stores/users', () => ({ usersStore: () => ({ getUser: () => ({ full_n
 vi.mock('@/data/document', () => ({ useDocument: () => ({ document: { fieldPropertyOverrides: {} }, triggerOnChange: async () => {} }) }))
 vi.mock('@/router', () => ({ default: { push() {} } }))
 // These independent modal products are not the dialog under test.
+vi.mock('@/components/CommandPalette/CommandPalette.vue', () => ({ default: { render: () => null } }))
 vi.mock('@/components/Modals/AboutModal.vue', () => ({ default: { render: () => null } }))
 vi.mock('@/components/Modals/CreateDocumentModal.vue', () => ({ default: { render: () => null } }))
 vi.mock('@/components/Modals/QuickEntryModal.vue', () => ({ default: { render: () => null } }))

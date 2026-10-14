@@ -153,10 +153,10 @@ revision/typed-owner remounting and draft retention across methods/native tabs a
 record reload, plus native Lead/Deal adapter/editor defaults and independent actions.
 These are maintained contract tests, not site registration or real persistence proof.
 
-The pinned Vite 5.4.21 / frappe-ui 1.0.0-beta.29 development setup excludes
+The stable-upgrade Vite 8.2.0 / frappe-ui 1.0.0-beta.29 development setup excludes
 `frappe-ui` from dependency prebundling. This installed package ships unbuilt
 TextEditor source with virtual `~icons/lucide/*` imports. Its native Vite plugin
-resolves them when serving source, while the esbuild dependency optimizer cannot
+resolves them when serving source, while dependency prebundling cannot
 bundle them. The exclusion also covers package subpaths and keeps the existing
 native plugin, dependency includes and single-runtime deduplication in place.
 CommonJS dependencies still require optimization; `feather-icons` is already
@@ -170,8 +170,9 @@ app's optimized VueUse 10 code. Prebundling Reka resolves its dependency with th
 correct importer context, retaining both declared versions and existing Vue
 deduplication. This configuration affects development, not production bundling.
 
+The optimizer exclusions remain subject to an actual Vite startup/page proof on each upgrade.
 See the [installed Frappe UI plugin](https://github.com/frappe/frappe-ui/blob/v1.0.0-beta.29/vite/index.js)
-and [Vite 5 optimizer contract](https://github.com/vitejs/vite/blob/v5.4.21/docs/config/dep-optimization-options.md).
+and [Vite optimizer contract](https://vite.dev/config/dep-optimization-options).
 The [current Frappe UI plugin](https://github.com/frappe/frappe-ui/blob/main/vite/index.js)
 also explicitly includes `reka-ui`; this older installed plugin does not.
 Recheck the exclusion when upgrading those versions: newer Frappe UI source has
@@ -181,8 +182,8 @@ insufficient evidence.
 
 Run in the isolated CRM worktree with the existing container/dependencies:
 
-The default Vitest configuration merges the native component configuration, so
-one command can run unit and integration checks. It retains native Vue transforms,
+The default upstream Vitest configuration runs unit and integration checks.
+The narrow relationship command reuses it. It retains native Vue and JSX transforms,
 framework aliases, peer deduplication and `test.server.deps.inline` for Frappe UI's
 unbuilt source. Without inlining, Node tries to resolve its extensionless imports
 outside Vite and integration collection fails. This is test configuration, separate

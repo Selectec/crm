@@ -1109,7 +1109,7 @@ describe('native source permission capabilities', () => {
     await settle()
     await callAction('Edit Task')
     expect(modal.name.value).toBe(171)
-    expect(modal.defaults.value).toEqual({status:'Backlog',priority:'Low'})
+    expect(modal.defaults.value).toEqual({})
     expect(defaults.reference_docname).toBe('Source/with spaces')
   })
   it('preserves ordinary Call editor defaults when no creation context is supplied', async () => {

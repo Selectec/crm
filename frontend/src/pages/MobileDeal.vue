@@ -254,6 +254,7 @@
     v-model="showDeleteLinkedDocModal"
     :doctype="'CRM Deal'"
     :docname="dealId"
+    :title="doc.organization"
     name="Deals"
   />
   <LostReasonModal
@@ -280,6 +281,7 @@ import AttachmentIcon from '@/components/Icons/AttachmentIcon.vue'
 import WhatsAppIcon from '@/components/Icons/WhatsAppIcon.vue'
 import IndicatorIcon from '@/components/Icons/IndicatorIcon.vue'
 import ArrowUpRightIcon from '@/components/Icons/ArrowUpRightIcon.vue'
+import FileTextIcon from '@/components/Icons/FileTextIcon.vue'
 import SuccessIcon from '@/components/Icons/SuccessIcon.vue'
 import LayoutHeader from '@/components/LayoutHeader.vue'
 import Activities from '@/components/Activities/Activities.vue'
@@ -302,7 +304,9 @@ import { useDocument } from '@/data/document'
 import { isMobileView } from '@/composables/settings'
 import { whatsappEnabled } from '@/composables/whatsapp'
 import { callEnabled } from '@/composables/telephony'
+import { canViewQuotations } from '@/composables/erpnext'
 import { useActiveTabManager } from '@/composables/useActiveTabManager'
+import { useVisitedRecords } from '@/composables/useVisitedRecords'
 import {
   createResource,
   Dropdown,
@@ -343,8 +347,11 @@ const {
 
 const doc = computed(() => document.doc || {})
 
+const { markVisited } = useVisitedRecords('CRM Deal')
+
 onMounted(async () => {
   if (document.doc) await triggerOnRender()
+  markVisited(props.dealId)
 })
 
 watch(error, (err) => {
@@ -483,6 +490,12 @@ const tabs = computed(() => {
       icon: WhatsAppIcon,
       condition: () => whatsappEnabled.value,
     },
+    {
+      name: 'Quotations',
+      label: __('Quotations'),
+      icon: FileTextIcon,
+      condition: () => canViewQuotations.value,
+    },
   ]
   return tabOptions.filter((tab) => (tab.condition ? tab.condition() : true))
 })
@@ -588,7 +601,9 @@ const dealContacts = createResource({
       (section) => section.name == 'contacts_section',
     )
     if (!contactSection) return
-    contactSection.contacts = data.map((contact) => {
+    // get_deal_contacts orders primary first, so expanding the first contact
+    // surfaces the most relevant email and phone without a click.
+    contactSection.contacts = data.map((contact, index) => {
       return {
         name: contact.name,
         full_name: contact.full_name,
@@ -596,7 +611,7 @@ const dealContacts = createResource({
         mobile_no: contact.mobile_no,
         image: contact.image,
         is_primary: contact.is_primary,
-        opened: false,
+        opened: index === 0,
       }
     })
   },
@@ -614,13 +629,12 @@ function updateField(name, value) {
 
   document.save.submit(null, {
     onSuccess: () => (reload.value = true),
-    onError: (err) => {
+    onError: () => {
       if (Array.isArray(name)) {
         name.forEach((field) => (doc.value[field] = oldValues[field]))
       } else {
         doc.value[name] = oldValues
       }
-      toast.error(err.messages?.[0] || __('Error updating field'))
     },
   })
 }
