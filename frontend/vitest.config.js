@@ -3,7 +3,10 @@ import vue from '@vitejs/plugin-vue'
 import vueJsx from '@vitejs/plugin-vue-jsx'
 import path from 'path'
 
+const benchApps = process.env.CRM_BENCH_APPS || path.resolve(import.meta.dirname, '../..')
+
 export default defineConfig({
+  server: { fs: { allow: [benchApps] } },
   plugins: [vue(), vueJsx()],
   test: {
     globals: true,
@@ -31,7 +34,7 @@ export default defineConfig({
   resolve: {
     dedupe: ['vue', 'vue-router', 'frappe-ui', '@tiptap/core', '@tiptap/pm', 'prosemirror-model'],
     alias: [
-      { find: '@framework/ui', replacement: path.resolve(process.env.CRM_BENCH_APPS || path.resolve(import.meta.dirname, '../..'), 'frappe/ui/src') },
+      { find: '@framework/ui', replacement: path.resolve(benchApps, 'frappe/ui/src') },
       { find: '@', replacement: path.resolve(import.meta.dirname, 'src') },
       {
         find: /^~icons\/.*/,
