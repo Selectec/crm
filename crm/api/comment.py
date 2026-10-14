@@ -18,8 +18,6 @@ def notify_mentions(doc):
 	Extract mentions from `content`, and notify.
 	`content` must have `HTML` content.
 	"""
-	if doc.reference_doctype not in ["CRM Lead", "CRM Deal"]:
-		return
 	content = getattr(doc, "content", None)
 	if not content:
 		return
@@ -30,11 +28,10 @@ def notify_mentions(doc):
 		doctype = doc.reference_doctype
 		if doctype.startswith("CRM "):
 			doctype = doctype[4:].lower()
-		name = (
-			reference_doc.lead_name
-			if doctype == "lead"
-			else reference_doc.organization or reference_doc.lead_name
-		)
+		# Native title metadata applies to every referenced DocType. Keep the
+		# existing untitled Deal's lead-name fallback without assuming that
+		# unrelated records expose sales-specific attributes.
+		name = reference_doc.get_title() or reference_doc.get("lead_name") or reference_doc.name
 		notification_text = f"""
             <div class="mb-2 leading-5 text-ink-gray-5">
                 <span class="font-medium text-ink-gray-9">{ owner }</span>

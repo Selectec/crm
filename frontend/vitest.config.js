@@ -9,7 +9,7 @@ export default defineConfig({
     globals: true,
     environment: 'happy-dom',
     root: import.meta.dirname,
-    setupFiles: ['./tests/setup.js'],
+    setupFiles: [path.resolve(import.meta.dirname, 'tests/setup.js')],
     include: ['tests/**/*.test.js', 'src/**/*.test.js'],
     server: {
       deps: {
@@ -31,7 +31,7 @@ export default defineConfig({
   resolve: {
     dedupe: ['vue', 'vue-router', 'frappe-ui', '@tiptap/core', '@tiptap/pm', 'prosemirror-model'],
     alias: [
-      { find: '@framework/ui', replacement: path.resolve(process.env.CRM_BENCH_APPS || '../..', 'frappe/ui/src') },
+      { find: '@framework/ui', replacement: path.resolve(process.env.CRM_BENCH_APPS || path.resolve(import.meta.dirname, '../..'), 'frappe/ui/src') },
       { find: '@', replacement: path.resolve(import.meta.dirname, 'src') },
       {
         find: /^~icons\/.*/,
