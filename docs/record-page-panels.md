@@ -154,11 +154,14 @@ record reload, plus native Lead/Deal adapter/editor defaults and independent act
 These are maintained contract tests, not site registration or real persistence proof.
 
 Stable CRM upgrades the development toolchain to Vite 8.2.0 while retaining
-frappe-ui 1.0.0-beta.29. The former Vite 5 exclusion for frappe-ui's virtual
-`~icons/lucide/*` imports is removed: the Vite 8 native optimizer resolves those
-imports through the installed plugin. An isolated browser proof mounted native
-Tabs and TextEditor with the package prebundled and no uncaught errors. Actual
-CRM development-page checks remain a separate acceptance gate.
+frappe-ui 1.0.0-beta.29. Keep the existing Frappe UI optimizer exclusion.
+Although an isolated native Tabs/TextEditor page works with the package
+prebundled, actual CRM routes also load the editor subpath and its raw Vue
+components. Prebundling that mixed graph registers ProseMirror's `gapcursor`
+selection twice and leaves the page blank. A fresh actual CRM page reproduces
+this failure with the exclusion removed; restoring it passes native page loading
+and editor journeys. Retire the exclusion only when actual CRM routes, including
+the lazy editor and contributor workflows, pass without duplicate registration.
 CommonJS dependencies still require optimization; `feather-icons` is already
 included. `reka-ui` is also explicitly optimized: installed Reka 2.10.1 depends on
 VueUse 14 (nested 14.2.1), while this app uses VueUse 10.11.1. Serving Reka's raw

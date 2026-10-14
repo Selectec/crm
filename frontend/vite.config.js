@@ -93,6 +93,10 @@ export default defineConfig(async ({ mode }) => {
       ],
     },
     optimizeDeps: {
+      // Keep Vue editor source and its selection registry in one module graph.
+      // Prebundling frappe-ui/editor alongside its raw SFC imports duplicates
+      // the gapcursor JSON selection registration on actual CRM routes.
+      exclude: ['frappe-ui'],
       include: [
         // Prebundle Reka with its own VueUse 14 dependency, rather than letting
         // its raw imports reuse the app's optimized VueUse 10 dependency.
