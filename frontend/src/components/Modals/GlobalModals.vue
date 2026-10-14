@@ -18,8 +18,10 @@
   <AboutModal v-model="showAboutModal" />
   <FieldLayoutDialogContainer />
   <RecordPanelDialogContainer />
+  <CommandPalette />
 </template>
 <script setup>
+import CommandPalette from '@/components/CommandPalette/CommandPalette.vue'
 import FieldLayoutDialogContainer from '@/components/Modals/FieldLayoutDialogContainer.vue'
 import RecordPanelDialogContainer from '@/components/Modals/RecordPanelDialogContainer.vue'
 import ChangePasswordModal from '@/components/Modals/ChangePasswordModal.vue'

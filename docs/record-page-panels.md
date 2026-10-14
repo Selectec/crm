@@ -153,12 +153,15 @@ revision/typed-owner remounting and draft retention across methods/native tabs a
 record reload, plus native Lead/Deal adapter/editor defaults and independent actions.
 These are maintained contract tests, not site registration or real persistence proof.
 
-The pinned Vite 5.4.21 / frappe-ui 1.0.0-beta.29 development setup excludes
-`frappe-ui` from dependency prebundling. This installed package ships unbuilt
-TextEditor source with virtual `~icons/lucide/*` imports. Its native Vite plugin
-resolves them when serving source, while the esbuild dependency optimizer cannot
-bundle them. The exclusion also covers package subpaths and keeps the existing
-native plugin, dependency includes and single-runtime deduplication in place.
+Stable CRM upgrades the development toolchain to Vite 8.2.0 while retaining
+frappe-ui 1.0.0-beta.29. Keep the existing Frappe UI optimizer exclusion.
+Although an isolated native Tabs/TextEditor page works with the package
+prebundled, actual CRM routes also load the editor subpath and its raw Vue
+components. Prebundling that mixed graph registers ProseMirror's `gapcursor`
+selection twice and leaves the page blank. A fresh actual CRM page reproduces
+this failure with the exclusion removed; restoring it passes native page loading
+and editor journeys. Retire the exclusion only when actual CRM routes, including
+the lazy editor and contributor workflows, pass without duplicate registration.
 CommonJS dependencies still require optimization; `feather-icons` is already
 included. `reka-ui` is also explicitly optimized: installed Reka 2.10.1 depends on
 VueUse 14 (nested 14.2.1), while this app uses VueUse 10.11.1. Serving Reka's raw
@@ -170,19 +173,21 @@ app's optimized VueUse 10 code. Prebundling Reka resolves its dependency with th
 correct importer context, retaining both declared versions and existing Vue
 deduplication. This configuration affects development, not production bundling.
 
+The Reka optimizer include remains subject to an actual Vite startup/page proof on each upgrade.
+Removing it on Vite 8 still reproduced the native ResizeObserver non-Element error.
 See the [installed Frappe UI plugin](https://github.com/frappe/frappe-ui/blob/v1.0.0-beta.29/vite/index.js)
-and [Vite 5 optimizer contract](https://github.com/vitejs/vite/blob/v5.4.21/docs/config/dep-optimization-options.md).
+and [Vite optimizer contract](https://vite.dev/config/dep-optimization-options).
 The [current Frappe UI plugin](https://github.com/frappe/frappe-ui/blob/main/vite/index.js)
 also explicitly includes `reka-ui`; this older installed plugin does not.
-Recheck the exclusion when upgrading those versions: newer Frappe UI source has
+Recheck the remaining include when upgrading those versions: newer Frappe UI source has
 changed its icon and optimizer defaults. Native startup and real-page
 development proof must verify this workaround; production success alone is
 insufficient evidence.
 
 Run in the isolated CRM worktree with the existing container/dependencies:
 
-The default Vitest configuration merges the native component configuration, so
-one command can run unit and integration checks. It retains native Vue transforms,
+The default upstream Vitest configuration runs unit and integration checks.
+The narrow relationship command reuses it. It retains native Vue and JSX transforms,
 framework aliases, peer deduplication and `test.server.deps.inline` for Frappe UI's
 unbuilt source. Without inlining, Node tries to resolve its extensionless imports
 outside Vite and integration collection fails. This is test configuration, separate

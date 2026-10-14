@@ -197,3 +197,60 @@ stock native inline uploader and FileUploader unchanged. The already-working
 inline attribute fallthrough is now an explicit prop so the same public callback
 can also govern attachment selection; this introduces no alternative transport
 or File permission policy in CRM.
+
+
+## Stable upgrade inventory — 14 October 2026
+
+The supported base is official CRM **v1.87.0**, commit
+`0d3910b456ef4fb913e77b29db011b3debc4f778` (Frappe `>=15,<17`).
+The previous fork pin was `6ff9861ffe061cb249178010f4f054b6c6960621`,
+based on `49d98d61e7d42c3bfc97ea65725c68d632c6b849`.
+Compare the final candidate against this stable base, not against the original
+1.81.2 base or future v2/develop. Selectec maintains every item below. The
+interface includes the native facade and editor lifecycle as well as panel hosting.
+
+### Panel hosting
+
+| Adaptation and source | Gap in stable; retained delegation | Verification / retirement condition |
+| --- | --- | --- |
+| [Discovery](../crm/api/record_page.py), [registry](../frontend/src/utils/recordPanelRegistry.js) | No installed-app descriptor/owned-bundle discovery for these pages. Native parent permissions and asset manifest remain authoritative. | Discovery/registry tests and installed unrelated-contributor browser lane; retire when released upstream provides equivalent typed permission/asset ownership, failure isolation and removal. |
+| [Host lifecycle](../frontend/src/composables/useRecordPagePanels.js), [retained groups](../frontend/src/components/RecordPagePanels.vue), Organization/Contact and MobileOrganization/MobileContact pages | Stable still has closed relationship tab templates. Native tabs, actions, info and related routes remain. | relationshipPages tests and registration/navigation browsers on all four pages; retire after upstream retains drafts, handles delayed typed navigation, errors/Retry, revision changes and removal equivalently. |
+| [Native runtime](../frontend/src/components/Activities/recordPanelRuntime.js) | No shared Vue/native-component facade for contributors. Reuses CRM's actual runtime and widgets. | Mounted facade tests and production/dev bundle browser checks; retire after migrating consumers to an equivalent released single-runtime API. |
+| [Sales renderer dialog](../frontend/src/utils/renderRecordPanelDialog.js), RecordPanelDialog/container, script.js and GlobalModals | Native metadata formDialog cannot host the rich contributor composer. Native Dialog/controller identity and close controls remain. Upstream CommandPalette remains mounted. | recordPanelDialog tests and sales-activity browser; retire when a supported rich app renderer preserves permission-before-assets, exposed actions, close guards and disposal. |
+
+### Editor and save behaviour
+
+| Adaptation and source | Gap in stable; retained delegation | Verification / retirement condition |
+| --- | --- | --- |
+| [DoctypeModal](../frontend/src/components/Modals/DoctypeModal.vue), doctypeModal.js and DoctypeModals.vue | Stable still updates loaded fields rather than submitting the original full revision; lacks async modal policy. Opt-in uses native frappe.client.save, native controllers and attachment cleanup. Default sales saves stay native. | relationshipPages and documentLifetime component tests; real note/task/call conflicts, permissions and record-forms browsers. Retire once upstream preserves originally loaded modified, isolated unsent drafts/controllers, async permission failure and close-during-save semantics. |
+| [Document context](../frontend/src/data/document.js), [Field](../frontend/src/components/FieldLayout/Field.vue), FieldLayout.vue | Stable has shared cached controllers and no authoritative read-only editor context. Keeps native layout/scripts; upstream fetch_from previews target the editor's own copy. | editorFetchFrom and modal tests, native forms/conflict browsers; retire when upstream isolates async field/controller mutations and enforces requested viewer mode even with script overrides. |
+| [CommentArea](../frontend/src/components/Activities/CommentArea.vue) | Stable owner-only controls and scalar save cannot express source permissions or original revision. Keeps upstream RichTextField, native menu/confirmation and default CRUD. | relationshipPages tests and phase2/sales-comments browsers; retire after released source capabilities and save/delete callbacks preserve revision, draft and default native callers. |
+| [Call defaults](../frontend/src/components/Modals/CallLogDetailModal.vue), CallArea.vue and Activities.vue | Stable now derives Lead/Deal reference defaults; it still cannot accept the app's explicit association fields. Merge app defaults only on creation; existing sources receive none. Retain native link endpoints/callbacks and standalone onboarding guard. | relationshipPages, call-note-action/call-task-action and stock sales browsers; retire when upstream supplies authorized caller defaults and completes callbacks without initialized onboarding. |
+
+### Widgets, upload and realtime interfaces
+
+| Adaptation and source | Gap in stable; retained delegation | Verification / retirement condition |
+| --- | --- | --- |
+| [Activities adapter](../frontend/src/components/Activities/Activities.vue), NoteArea, TaskArea, AttachmentArea | Stable sales resource/composer defaults cannot represent permission-filtered typed streams or independent action capabilities. Existing native defaults remain. | Mounted typed keys, paging, retry, card capabilities and native sales controls; retire when equivalent upstream slots/resource/action inputs are available and consumers migrated. |
+| [EmailEditor](../frontend/src/components/EmailEditor.vue), [CommentBox](../frontend/src/components/CommentBox.vue) | Stable inline and selected-file transports cannot both use the contributor's captured source context. Optional callback keeps native editor/media progress/cancellation and stock upload defaults. | emailControls/commentComposer and phase2/files/email browsers; retire when both upload paths support a common supplied native uploader with draft/error retention. |
+| [EmailArea](../frontend/src/components/Activities/EmailArea.vue) | Stable lacks read-only reply capability and optional identity callback. Keeps native content and Reply population, including stable openEmailBox() and replyAddresses sender selection. | emailControls and activity-surface/email-reply browsers; retire when upstream exposes equivalent reply capability/event and consumers migrate. Wyatt supplies openEmailBox() on its companion facade. |
+| [Realtime](../frontend/src/utils/recordRealtime.js), Activities.vue and document.js | Upstream deletion marker suppresses a recent expected missing document error; it does not dispose cached listeners or preserve independent consumers. Native socket API/permission-checked rooms remain. Keep upstream deletion marker for active native deletion. | recordRealtime/documentLifetime/relationshipPages tests and real notes/tasks/files refresh; retire after released owner-counted disposal, exact callback removal, reconnect and typed subscription behaviour passes. |
+| [Notification parameters](../frontend/src/components/Notifications.vue), MobileNotification.vue; [Communication identity](../crm/api/activities.py) | Stable still assumes sales route parameters and omits outer Communication identity. Native hashes/projection remain. | notificationRoutes, native activities server tests and sales/relationship browsers; retire when stable emits and consumes typed identities/route params on both renderers. |
+
+### Independent fixes and retired adaptations
+
+| Item | Stable comparison and decision | Verification / retirement condition |
+| --- | --- | --- |
+| [Link footer focus](../frontend/src/components/Controls/Link.vue) | New upstream retained selected-option support does not guard footer mousedown. Retain the existing focus guard and delegate native callbacks. | linkFooter and inline-contact-creation browsers; retire once pending/populated query creation/clear and mouse/keyboard selection pass upstream. |
+| [Task reference routes](../frontend/src/pages/Tasks.vue), [recordRoute](../frontend/src/utils/recordRoute.js) | Stable still falls back to Lead for non-Deal references. Retain finite typed routes. Adopt upstream linked-delete dialog; remove the obsolete direct-delete function. | taskReferences/recordRoute and task-navigation browsers; retire when native routes cover supported types and omit unknown targets. |
+| [Vite Frappe UI optimizer exclusion](../frontend/vite.config.js) | Actual stable CRM routes mix optimized editor exports with raw Vue component imports and register `gapcursor` twice when removed. Retain the existing exclusion; the isolated widget proof alone is insufficient. | Fresh Vite startup plus actual CRM page/editor/contributor journeys; retire when the mixed module graph shares one selection registration. |
+| [Vite Reka optimizer include](../frontend/vite.config.js) | Stable Vite 8.2.0 still pins Frappe UI beta.29 and lacks the Reka/VueUse include. Removing it reproduces the native ResizeObserver non-Element error in isolated native Tabs. Retain; no dependency downgrade. | Production build plus Vite browser full reload; retire when native Tabs resolves Reka against its own declared VueUse version without the include. |
+| [Native mention producer/titles](../crm/api/comment.py), tests/test_comment_mentions.py | **Retained.** Stable restricts CRM mentions to Lead/Deal. Frappe creates Desk Notification Log copies; Wyatt filters/projects existing CRM Notification copies and does not produce them. Preserve the existing generic native producer and metadata title fallback for readable relationship/activity comments. | Native comments/phase2 tests require both notification types and source-aware CRM routing; retire only when a released CRM producer provides equivalent copies, labels, privacy and native sales behaviour. |
+| Duplicate component test transforms/baseline routing | **Removed.** Reuse upstream Vue/setup/icon configuration with required framework alias/deduplication and JSX support. The narrow command shares the default config. Remove stopped-investigation RELATIONSHIP_BASELINE routing. | Full default Vitest suite, including upstream tests and all maintained component contracts. |
+
+AttachmentItem remains the unchanged native `span > a > button` wrapper, with
+only label/url props. CommentBox retains its fixed footer/toolbar layout without
+a compact option. Wyatt's scoped CSS therefore remains necessary; check long
+labels, actual emoji targets and formatting controls at 1280px and 390px. These
+are app layout assumptions, not additional CRM patches. Retire those selectors
+when upstream exposes fitting layout options or changes the corresponding DOM.
