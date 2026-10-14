@@ -44,9 +44,11 @@
     "vuedraggable": "^4.1.0"
   },
   "resolutions": {
-    "dompurify": "3.4.17",
-    "prosemirror-view": "1.42.6",
-    "vite": "8.3.4"
+    "dompurify": "3.4.0",
+    "picomatch": "4.0.5",
+    "prosemirror-model": "1.25.9",
+    "prosemirror-view": "1.41.9",
+    "vite": "8.2.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
