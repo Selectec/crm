@@ -93,9 +93,6 @@ export default defineConfig(async ({ mode }) => {
       ],
     },
     optimizeDeps: {
-      // Installed frappe-ui beta.29 contains virtual lucide imports. Serve its
-      // source through the native Vite plugin rather than esbuild prebundling.
-      exclude: ['frappe-ui'],
       include: [
         // Prebundle Reka with its own VueUse 14 dependency, rather than letting
         // its raw imports reuse the app's optimized VueUse 10 dependency.

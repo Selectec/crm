@@ -153,12 +153,12 @@ revision/typed-owner remounting and draft retention across methods/native tabs a
 record reload, plus native Lead/Deal adapter/editor defaults and independent actions.
 These are maintained contract tests, not site registration or real persistence proof.
 
-The stable-upgrade Vite 8.2.0 / frappe-ui 1.0.0-beta.29 development setup excludes
-`frappe-ui` from dependency prebundling. This installed package ships unbuilt
-TextEditor source with virtual `~icons/lucide/*` imports. Its native Vite plugin
-resolves them when serving source, while dependency prebundling cannot
-bundle them. The exclusion also covers package subpaths and keeps the existing
-native plugin, dependency includes and single-runtime deduplication in place.
+Stable CRM upgrades the development toolchain to Vite 8.2.0 while retaining
+frappe-ui 1.0.0-beta.29. The former Vite 5 exclusion for frappe-ui's virtual
+`~icons/lucide/*` imports is removed: the Vite 8 native optimizer resolves those
+imports through the installed plugin. An isolated browser proof mounted native
+Tabs and TextEditor with the package prebundled and no uncaught errors. Actual
+CRM development-page checks remain a separate acceptance gate.
 CommonJS dependencies still require optimization; `feather-icons` is already
 included. `reka-ui` is also explicitly optimized: installed Reka 2.10.1 depends on
 VueUse 14 (nested 14.2.1), while this app uses VueUse 10.11.1. Serving Reka's raw
@@ -170,12 +170,13 @@ app's optimized VueUse 10 code. Prebundling Reka resolves its dependency with th
 correct importer context, retaining both declared versions and existing Vue
 deduplication. This configuration affects development, not production bundling.
 
-The optimizer exclusions remain subject to an actual Vite startup/page proof on each upgrade.
+The Reka optimizer include remains subject to an actual Vite startup/page proof on each upgrade.
+Removing it on Vite 8 still reproduced the native ResizeObserver non-Element error.
 See the [installed Frappe UI plugin](https://github.com/frappe/frappe-ui/blob/v1.0.0-beta.29/vite/index.js)
 and [Vite optimizer contract](https://vite.dev/config/dep-optimization-options).
 The [current Frappe UI plugin](https://github.com/frappe/frappe-ui/blob/main/vite/index.js)
 also explicitly includes `reka-ui`; this older installed plugin does not.
-Recheck the exclusion when upgrading those versions: newer Frappe UI source has
+Recheck the remaining include when upgrading those versions: newer Frappe UI source has
 changed its icon and optimizer defaults. Native startup and real-page
 development proof must verify this workaround; production success alone is
 insufficient evidence.
