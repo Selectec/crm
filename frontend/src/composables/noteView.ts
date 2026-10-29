@@ -23,6 +23,7 @@ interface LinkedDoc {
 const show = ref(false)
 const note = ref<NoteRef | null>(null)
 const onEdit = ref<(() => void) | null>(null)
+let openRequest = 0
 
 const linkedDocs: Record<LinkedDoctype, LinkedDoc> = {
   'CRM Lead': {
@@ -46,10 +47,24 @@ function linkedDoc(note?: NoteRef | null): LinkedDoc | undefined {
   return linkedDocs[note?.reference_doctype as LinkedDoctype]
 }
 
-function openNote(
+async function openNote(
   _note: NoteRef,
   { edit = null }: { edit?: (() => void) | null } = {},
 ) {
+  const request = ++openRequest
+  // Shared links contain only a name. Resolve native permissions before the
+  // viewer opens, including links to Notes outside the loaded list page.
+  if (!_note.owner) {
+    try {
+      _note = await call('frappe.client.get', {
+        doctype: 'FCRM Note',
+        name: _note.name,
+      })
+    } catch {
+      return
+    }
+  }
+  if (request !== openRequest) return
   note.value = _note
   onEdit.value = edit
   show.value = true
