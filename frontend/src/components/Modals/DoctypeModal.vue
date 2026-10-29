@@ -1,18 +1,29 @@
 <template>
-  <Dialog v-model:open="show" :size="'xl'">
-    <template #body>
-      <div class="bg-surface-elevation-1 px-4 pb-6 pt-5 sm:px-6">
+  <Dialog
+    v-model:open="show"
+    :size="doctype === 'FCRM Note' ? '2xl' : 'xl'"
+    :dismissible="doctype !== 'FCRM Note'"
+    bare
+  >
+    <template #default>
+      <div
+        class="bg-surface-elevation-2 px-4 pb-6 pt-5 sm:px-6"
+        @keydown.meta.enter.capture.prevent.stop="submit"
+        @keydown.ctrl.enter.capture.prevent.stop="submit"
+      >
         <div class="mb-5 flex items-center justify-between">
           <div class="flex gap-2 items-center">
-            <h3 class="text-3xl-semibold leading-6 text-ink-gray-9">
-              {{
-                readOnly
-                  ? __('View ' + (doctypeTitle || doctype))
-                  : editMode
-                  ? __('Edit ' + (doctypeTitle || doctype))
-                  : __('Create ' + (doctypeTitle || doctype))
-              }}
-            </h3>
+            <Dialog.Title as-child>
+              <h3 class="text-3xl-semibold leading-6 text-ink-gray-9">
+                {{
+                  readOnly
+                    ? __('View ' + (doctypeTitle || doctype))
+                    : editMode
+                      ? __('Edit ' + (doctypeTitle || doctype))
+                      : __('Create ' + (doctypeTitle || doctype))
+                }}
+              </h3>
+            </Dialog.Title>
           </div>
           <div class="flex items-center gap-1">
             <CustomActions
@@ -28,12 +39,14 @@
               :icon="EditIcon"
               @click="openQuickEntryModal"
             />
-            <Button
-              variant="ghost"
-              class="w-7"
-              icon="lucide-x"
-              @click="show = false"
-            />
+            <Dialog.Close as-child>
+              <Button
+                :aria-label="__('Close')"
+                variant="ghost"
+                class="w-7"
+                icon="lucide-x"
+              />
+            </Dialog.Close>
           </div>
         </div>
         <div>
@@ -71,7 +84,7 @@
               loadFailed ||
               (fullDocumentSave && editMode && !editorDoc)
             "
-            @click="editMode ? update() : create()"
+            @click="submit"
           />
         </div>
       </div>
@@ -90,7 +103,7 @@ import { usersStore } from '@/stores/users'
 import { showQuickEntryModal, quickEntryProps } from '@/composables/modals'
 import { isMobileView } from '@/composables/settings'
 import { setupCustomizations } from '@/utils'
-import { call, createResource, toast } from 'frappe-ui'
+import { Dialog, call, createResource, toast } from 'frappe-ui'
 import { ref, reactive, computed, watch, nextTick, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -129,7 +142,12 @@ const editor = useDocument(
   props.doctype,
   props.docname || null,
   {},
-  reactive({ doc: null, actions: [], fieldPropertyOverrides: {}, fieldHtmlMap: {} }),
+  reactive({
+    doc: null,
+    actions: [],
+    fieldPropertyOverrides: {},
+    fieldHtmlMap: {},
+  }),
 )
 const editorDoc = computed({
   get: () => editor.document.doc,
@@ -220,7 +238,8 @@ const documentSave = createResource({
     if (!hookFailed) show.value = false
   },
   onError: async (err) => {
-    error.value = err.messages?.[0] || err.message || 'Could not update document'
+    error.value =
+      err.messages?.[0] || err.message || 'Could not update document'
     try {
       await editor.triggerOnError?.()
     } catch (hookError) {
@@ -246,6 +265,13 @@ async function update() {
     }
     return
   }
+  // Preserve the vendor unchanged-document shortcut only for its native
+  // field-save path; an opted-in editor owns a separate working copy.
+  if (!document.isDirty) {
+    toast.info(__('Nothing to update'))
+    show.value = false
+    return
+  }
   document.save.submit(null, {
     onSuccess: (d) => {
       emit('afterUpdate', d)
@@ -255,6 +281,15 @@ async function update() {
       error.value = err.messages?.[0] || __('Could not update document')
     },
   })
+}
+
+async function submit() {
+  if (readOnly.value || initializing.value || loadFailed.value) return
+  // editors save their text on blur, so blur first when saving from the keyboard
+  window.document.activeElement?.blur()
+  await nextTick()
+  if (editMode.value) update()
+  else create()
 }
 
 function openQuickEntryModal() {
@@ -272,7 +307,6 @@ watch(
         $dialog,
         $socket,
         router,
-        toast,
         call,
       })
     }

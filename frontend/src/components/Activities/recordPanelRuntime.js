@@ -1,5 +1,5 @@
 import { h, ref, computed, watch, onMounted, onUnmounted, defineAsyncComponent } from 'vue'
-import { Button, ErrorMessage, TextEditor, createResource, call, toast, useFileUpload } from 'frappe-ui'
+import { Button, ErrorMessage, createResource, call, toast, useFileUpload } from 'frappe-ui'
 import { renderFieldLayoutDialog } from '@/utils/renderFieldLayoutDialog'
 import { useDoctypeModal } from '@/composables/doctypeModal'
 import { createRecordRealtime } from '@/utils/recordRealtime'
@@ -8,7 +8,7 @@ import { createRecordRealtime } from '@/utils/recordRealtime'
 const native = {
   Button,
   ErrorMessage,
-  TextEditor,
+  TextEditor: defineAsyncComponent(() => import('./RecordPanelTextEditor.vue')),
   Activities: defineAsyncComponent(() => import('./Activities.vue')),
   NoteArea: defineAsyncComponent(() => import('./NoteArea.vue')),
   TaskArea: defineAsyncComponent(() => import('./TaskArea.vue')),

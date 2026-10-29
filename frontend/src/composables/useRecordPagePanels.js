@@ -9,19 +9,25 @@ export function useRecordPagePanels({ record, scripts, nativeTabs, context }) {
   const error = ref('')
   const diagnostics = ref([])
   const loading = ref(false)
-  const tabIndex = ref(0)
+  const activeTab = ref(nativeTabs[0]?.name)
+  // Retain the existing numeric public model for contributor consumers while
+  // native Tabs uses stable, qualified values across discovery and reordering.
+  const tabIndex = computed({
+    get: () => tabs.value.findIndex(tab => tab.name === activeTab.value),
+    set: index => { if (tabs.value[index]) activeTab.value = tabs.value[index].name },
+  })
   const hostId = useId()
   const triggerId = name => `crm-panel-trigger-${hostId}-${encodeURIComponent(name)}`
   const ui = useRecordPanelRuntime(context.router, context.$socket)
   const runtime = Object.freeze(ui)
   const registry = getPanelRegistry()
   const tabs = computed(() => [...groups.value.flatMap(group => group.descriptor.panels), ...nativeTabs])
-  const selected = computed(() => tabs.value[tabIndex.value]?.name)
+  const selected = computed(() => activeTab.value)
   const isPanelTab = tab => groups.value.some(group => group.descriptor.panels.some(panel => panel.name === tab.name))
   const panelSelected = computed(() => isPanelTab(tabs.value[tabIndex.value] || {}))
   function selectPanel(name) {
     const index = tabs.value.findIndex(panel => panel.name === name)
-    if (index >= 0) tabIndex.value = index
+    if (index >= 0) activeTab.value = name
   }
   function panelTabAttributes(tab) {
     const group = groups.value.find(group => group.descriptor.panels.some(panel => panel.name === tab.name))
@@ -106,5 +112,5 @@ export function useRecordPagePanels({ record, scripts, nativeTabs, context }) {
     const customization = await setupCustomizations(registrations, { ...context, doc })
     if (!disposed && current === scriptGeneration) record._actions = customization.actions || []
   }, { immediate: true })
-  return { groups, error, diagnostics, loading, tabs, tabIndex, panelSelected, isPanelTab, panelTabAttributes, selectPanel, retry: () => discover() }
+  return { groups, error, diagnostics, loading, tabs, tabIndex, activeTab, panelSelected, isPanelTab, panelTabAttributes, selectPanel, retry: () => discover() }
 }

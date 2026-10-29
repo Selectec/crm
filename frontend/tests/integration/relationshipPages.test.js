@@ -3,7 +3,7 @@ import { Emitter } from '@socket.io/component-emitter'
 import { createApp, h, reactive, nextTick, toRaw, provide } from 'vue'
 import { createPinia } from 'pinia'
 import { createRouter, createMemoryHistory } from 'vue-router'
-import { Button, Dialog, ErrorMessage, Badge, FormControl, TextInput, FeatherIcon } from 'frappe-ui'
+import { Button, Dialog, ErrorMessage, Badge, FormControl, TextInput } from 'frappe-ui'
 import Organization from '@/pages/Organization.vue'
 import Contact from '@/pages/Contact.vue'
 import MobileOrganization from '@/pages/MobileOrganization.vue'
@@ -37,7 +37,7 @@ vi.mock('@/data/document', async () => {
     const key = `${doctype}:${name || ''}`
     if (!fixture.documents.has(key)) fixture.documents.set(key, reactive({
       doc: name ? { doctype, name, organization_name: name, full_name: name } : {},
-      setValue: { submit() {} }, save: { submit() {} }, actions: [], fieldPropertyOverrides: {},
+      isDirty: true, setValue: { submit() {} }, save: { submit() {} }, actions: [], fieldPropertyOverrides: {},
     }))
     const resource = editorDocument || fixture.documents.get(key)
     return {
@@ -123,7 +123,8 @@ vi.mock('@/stores/settings', async () => {
   return { getSettings: () => settings }
 })
 vi.mock('@/stores/global', () => ({ globalStore: () => ({$socket:fixture.socket || {on(){},off(){},emit(){}},$dialog(){},makeCall(){}}) }))
-vi.mock('@/stores/users', () => ({ usersStore: () => ({isManager:()=>false,getUser:()=>({full_name:'Staff'})}) }))
+vi.mock('@/stores/availability', () => ({ availabilityStore: () => ({ userStatus() {}, dotColor: () => 'bg-surface-gray-6' }) }))
+vi.mock('@/stores/users', () => ({ usersStore: () => ({isCrmUser:()=>true,isManager:()=>false,getUser:()=>({full_name:'Staff'})}) }))
 vi.mock('@/stores/statuses', () => ({ statusesStore: () => ({getDealStatus:()=>({})}) }))
 vi.mock('@/stores/organizations', () => ({ organizationsStore: () => ({getOrganization:()=>({})}) }))
 vi.mock('@/stores/meta', () => ({ getMeta: () => ({doctypesMeta:{'FCRM Note':{fields:[]}},doctypeMeta: {value:{}},getFields:()=>[],getField:()=>({}),getMeta:()=>({})}) }))
@@ -132,13 +133,15 @@ vi.mock('@/utils/view', () => ({ getView: () => null }))
 vi.mock('@/composables/whatsapp', async () => ({whatsappEnabled:(await import('vue')).ref(false)}))
 vi.mock('@/composables/telephony', () => ({callEnabled:{value:false}}))
 vi.mock('@/composables/useContactFields', () => ({useContactFields:()=>section=>section}))
-vi.mock('frappe-ui/frappe', () => ({useTelemetry:()=>({capture(){}}),useOnboarding:()=>({
-  totalSteps:{get value(){return fixture.onboardingCount ?? 8}},
-  updateOnboardingStep(step){
-    if(fixture.onboardingCount === 0) throw new TypeError('Onboarding UI has no initialized steps')
+vi.mock('@framework/ui/telemetry', () => ({ useTelemetry: () => ({ capture() {} }) }))
+vi.mock('@framework/ui/components/Onboarding', () => ({ useOnboarding: () => ({
+  totalSteps: { get value() { return fixture.onboardingCount ?? 8 } },
+  stepsCompleted: { value: 0 },
+  updateOnboardingStep(step) {
+    if (fixture.onboardingCount === 0) throw new TypeError('Onboarding UI has no initialized steps')
     fixture.onboardingUpdates?.push(step)
   },
-})}))
+}) }))
 vi.mock('@/components/SidePanelLayout.vue', () => ({default:{render:()=>h('aside','Record information')}}))
 vi.mock('@/components/Resizer.vue', () => ({default:{render(){return h('div',this.$slots.default?.())}}}))
 vi.mock('@/components/LayoutHeader.vue', () => ({default:{render(){return h('header',[this.$slots['left-header']?.(),this.$slots['right-header']?.()])}}}))
@@ -158,7 +161,8 @@ async function open(Page, props) {
   app.use(createPinia())
   app.use(router)
   app.use(translationPlugin)
-  for(const [name, component] of Object.entries({Button,Dialog,ErrorMessage,Badge,FormControl,TextInput,FeatherIcon,EmptyState,DeleteLinkedDocModal})) app.component(name,component)
+  app.provide('session', { user: 'native-author@example.test' })
+  for(const [name, component] of Object.entries({Button,Dialog,ErrorMessage,Badge,FormControl,TextInput,EmptyState,DeleteLinkedDocModal})) app.component(name,component)
   app.mount(element);await settle()
 }
 
@@ -481,7 +485,7 @@ describe('existing native relationship pages',()=>{
     fixture.controllerRights = Promise.resolve({fullDocumentSave:false,readOnly:false})
     const stockSave = vi.fn()
     const stock = {...loaded,name:'Stock after readonly policy Note',title:'Ordinary stock source'}
-    fixture.documents.set('FCRM Note:Stock after readonly policy Note',reactive({doc:stock,save:{submit:stockSave},actions:[],fieldPropertyOverrides:{}}))
+    fixture.documents.set('FCRM Note:Stock after readonly policy Note',reactive({doc:stock,isDirty:true,save:{submit:stockSave},actions:[],fieldPropertyOverrides:{}}))
     useDoctypeModal().showModal({doctype:'FCRM Note',name:stock.name,title:'Note'})
     await settle()
     expect(document.body.querySelector('input[placeholder="Title"]').value).toBe(stock.title)
@@ -597,7 +601,7 @@ describe('existing native relationship pages',()=>{
     await settle()
     const stockSave = vi.fn()
     const plain = {...managed,name:'Controller Plain Note',title:'Stock source',custom_use_revision:0}
-    fixture.documents.set('FCRM Note:Controller Plain Note',reactive({doc:plain,save:{submit:stockSave},actions:[],fieldPropertyOverrides:{}}))
+    fixture.documents.set('FCRM Note:Controller Plain Note',reactive({doc:plain,isDirty:true,save:{submit:stockSave},actions:[],fieldPropertyOverrides:{}}))
     useDoctypeModal().showModal({doctype:'FCRM Note',name:plain.name,title:'Note'})
     await settle()
     ;[...document.body.querySelectorAll('button')].find(button=>button.textContent==='Update').click()
@@ -652,7 +656,7 @@ describe('existing native relationship pages',()=>{
     fixture.renderDocument = doc=>{doc.title='Rendered by the native controller'}
     const loaded = {doctype:'FCRM Note',name:'Lifecycle Note',title:'Original',content:'<p>Full content</p>',modified:'2026-10-02 12:00:00.000001'}
     fixture.saveResult = {...loaded,title:'Rendered by the native controller',modified:'2026-10-02 12:01:00.000001'}
-    fixture.documents.set('FCRM Note:Lifecycle Note',reactive({doc:loaded,save:{submit:stockSave},actions:[],fieldPropertyOverrides:{}}))
+    fixture.documents.set('FCRM Note:Lifecycle Note',reactive({doc:loaded,isDirty:true,save:{submit:stockSave},actions:[],fieldPropertyOverrides:{}}))
     await open({render:()=>null},{})
     useDoctypeModal().showModal({doctype:'FCRM Note',name:'Lifecycle Note',title:'Note',fullDocumentSave:true,callbacks:{afterUpdate:callback}})
     await settle()
@@ -714,7 +718,7 @@ describe('existing native relationship pages',()=>{
     fixture.nativeSaves = []
     fixture.documents.set('FCRM Note:Revision Note', reactive({
       doc:{doctype:'FCRM Note',name:'Revision Note',title:'Loaded title',content:'<p>Loaded content</p>',modified:'2026-10-02 12:00:00.000001'},
-      save:{submit:stockSave},actions:[],fieldPropertyOverrides:{},
+      isDirty:true,save:{submit:stockSave},actions:[],fieldPropertyOverrides:{},
     }))
     await open({render:()=>null},{})
     useDoctypeModal().showModal({doctype:'FCRM Note',name:'Revision Note',title:'Note',fullDocumentSave:true})
@@ -1014,7 +1018,7 @@ describe('native relationship activity resource', () => {
     const resource = reactive({data:null,loading:false,error:new Error('Relationship history unavailable'),reload:vi.fn()})
     fixture.requests = []
     element = document.createElement('div'); document.body.append(element)
-    app = createApp({render:()=>h(Activities,{doctype:'Contact',docname:'Same Name',tabs:[{name:'Notes'}],adapter:{resource,doc:{name:'Same Name'},actions:{}}},{header:()=>null})})
+    app = createApp({render:()=>h(Activities,{doctype:'Contact',docname:'Same Name',tabs:[{name:'Notes',value:'notes'}], activeTab:'notes',adapter:{resource,doc:{name:'Same Name'},actions:{}}},{header:()=>null})})
     app.use(router); app.use(translationPlugin)
     for (const [name,component] of Object.entries({Button,ErrorMessage,Badge})) app.component(name,component)
     app.mount(element); await settle()
@@ -1072,7 +1076,7 @@ describe('native source permission capabilities', () => {
         context:{call_sid:'Native Call',[type.toLowerCase()]:{name:'New source'}},
       }])
       expect(fixture.callReload).toHaveBeenCalled()
-      expect(fixture.onboardingUpdates).toEqual(count ? [`create_first_${type.toLowerCase()}`] : [])
+      expect(fixture.onboardingUpdates).toEqual(count && type === 'Task' ? ['create_first_task'] : [])
     } finally {
       fixture.onboardingCount=undefined
       fixture.callMutations=null
@@ -1237,7 +1241,7 @@ describe('native sales activity defaults', () => {
   for (const doctype of ['CRM Lead','CRM Deal']) {
     it(`keeps the default resource and native note creation context for ${doctype}`, async () => {
       fixture.requestOptions=[]
-      await open({render:()=>h(Activities,{doctype,docname:'Sales record',tabs:[{name:'Notes'}]})},{})
+      await open({render:()=>h(Activities,{doctype,docname:'Sales record',tabs:[{name:'Notes',value:'notes'}], activeTab:'notes'})},{})
       const requests=fixture.requestOptions.filter(options=>options.url==='crm.api.activities.get_activities')
       expect(requests).toHaveLength(1)
       expect(requests[0].params).toEqual({name:'Sales record'})

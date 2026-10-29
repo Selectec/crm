@@ -3,7 +3,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { createApp, h, nextTick } from 'vue'
 import { createPinia } from 'pinia'
 import { createRouter, createMemoryHistory } from 'vue-router'
-import { Button, FeatherIcon } from 'frappe-ui'
+import { Button } from 'frappe-ui'
 import Notifications from '@/components/Notifications.vue'
 import MobileNotification from '@/pages/MobileNotification.vue'
 import translationPlugin from '@/translation'
@@ -14,8 +14,9 @@ vi.mock('@/stores/notifications', async () => {
   return {visible:ref(true),notifications:{get data(){return fixture.rows},reload(){}},notificationsStore:()=>({mark_as_read:{reload(){}},mark_doc_as_read(){},toggle(){}})}
 })
 vi.mock('@/stores/global',()=>({globalStore:()=>({$socket:{on(){},off(){}}})}))
-vi.mock('@/stores/users',()=>({usersStore:()=>({getUser:()=>({name:'native-author@example.test',full_name:'Native author'})})}))
-vi.mock('frappe-ui/frappe',()=>({useTelemetry:()=>({capture(){}})}))
+vi.mock('@/stores/availability', () => ({ availabilityStore: () => ({ userStatus() {}, dotColor: () => 'bg-surface-gray-6' }) }))
+vi.mock('@/stores/users',()=>({usersStore:()=>({isCrmUser:()=>true,getUser:()=>({name:'native-author@example.test',full_name:'Native author'})})}))
+vi.mock('@framework/ui/telemetry',()=>({useTelemetry:()=>({capture(){}})}))
 window.sysdefaults = {...window.sysdefaults,date_format:'yyyy-mm-dd',time_format:'HH:mm:ss'}
 let app,element
 afterEach(()=>{app?.unmount();element?.remove();fixture.rows=[];document.body.innerHTML=''})
@@ -35,7 +36,7 @@ async function render(rows, component = Notifications){
   element=document.createElement('div');document.body.append(element)
   app=createApp({render:()=>h(component)})
   app.use(createPinia());app.use(router);app.use(translationPlugin)
-  app.component('Button',Button);app.component('FeatherIcon',FeatherIcon)
+  app.component('Button',Button)
   app.mount(element);await nextTick()
 }
 const row=(route_name,name,params)=>({creation:'2026-10-02 12:00:00.000001',from_user:{name:'native-author@example.test',full_name:'Native author'},type:'Mention',read:false,notification_type_doctype:'Comment',notification_type_doc:`Native remark ${route_name}`,reference_name:name,route_name,hash:'#native-remark',...(params?{route_params:params}:{})})
@@ -65,15 +66,15 @@ it('native mobile notification page honors explicit typed relationship route par
     row('Contact','Native contact',{contactId:'Native contact'}),
   ], MobileNotification)
   expect([...element.querySelectorAll('a')].map(link=>link.getAttribute('href'))).toEqual([
-    '/organizations/Native%20organisation#Native%20remark%20Organization',
-    '/contacts/Native%20contact#Native%20remark%20Contact',
+    '/organizations/Native%20organisation#native-remark',
+    '/contacts/Native%20contact#native-remark',
   ])
 })
 
 it('ordinary mobile Lead and Deal notification links retain native target and remark identity', async()=>{
   await render([row('Lead','Native lead'),row('Deal','Native deal')], MobileNotification)
   expect([...element.querySelectorAll('a')].map(link=>link.getAttribute('href'))).toEqual([
-    '/leads/Native%20lead#Native%20remark%20Lead',
-    '/deals/Native%20deal#Native%20remark%20Deal',
+    '/leads/Native%20lead#native-remark',
+    '/deals/Native%20deal#native-remark',
   ])
 })

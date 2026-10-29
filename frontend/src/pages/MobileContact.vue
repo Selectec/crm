@@ -32,14 +32,14 @@
                     ? {
                         options: [
                           {
-                            icon: 'upload',
+                            icon: 'lucide-upload',
                             label: contact.doc.image
                               ? __('Change Image')
                               : __('Upload Image'),
                             onClick: openFileSelector,
                           },
                           {
-                            icon: 'trash-2',
+                            icon: 'lucide-trash-2',
                             label: __('Remove Image'),
                             onClick: () => changeContactImage(''),
                           },
@@ -50,7 +50,7 @@
                 class="!absolute bottom-0 left-0 right-0"
               >
                 <div
-                  class="z-1 absolute bottom-0 left-0 right-0 flex h-14 cursor-pointer items-center justify-center rounded-b-full bg-black bg-opacity-40 pt-5 opacity-0 duration-300 ease-in-out group-hover:opacity-100"
+                  class="z-1 absolute bottom-0 left-0 right-0 flex h-14 cursor-pointer items-center justify-center rounded-b-full bg-black bg-opacity-40 pt-5 duration-300 ease-in-out [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100"
                   style="
                     -webkit-clip-path: inset(22px 0 0 0);
                     clip-path: inset(22px 0 0 0);
@@ -99,43 +99,59 @@
       </template>
     </FileUploader>
     <Tabs
+      v-model="activeTab"
       :class="{ 'record-panels-selected': panelSelected }"
-      v-model="tabIndex"
-      as="div"
-      :tabs="tabs"
-      class="flex flex-1 overflow-auto flex-col [&_[role='tablist']]:gap-3 [&_[role='tablist']]:px-4 [&_[role='tabpanel']:not([hidden])]:flex [&_[role='tabpanel']:not([hidden])]:grow"
+      class="flex min-h-0 flex-1 flex-col overflow-hidden"
     >
-      <template #tab-item="{ tab, selected }">
-        <button
-          v-bind="panelTabAttributes(tab)"
-          v-if="tab.name !== 'native:Details'"
-          class="group flex items-center gap-2 border-b border-transparent py-2.5 text-base text-ink-gray-5 duration-300 ease-in-out hover:text-ink-gray-9 !px-4"
-          :class="{ 'text-ink-gray-9': selected }"
+      <TabList class="shrink-0 overflow-x-auto px-4 sm:px-5">
+        <TabTrigger
+          v-for="tab in tabs"
+          :key="tab.name"
+          :value="tab.name"
+          as-child
         >
-          <Icon v-if="typeof tab.icon === 'string'" :icon="tab.icon" class="h-5 w-5" />
-          <component :is="tab.icon" v-else-if="tab.icon" class="h-5" />
-          {{ __(tab.label) }}
-          <Badge
-            v-if="tab.count !== undefined"
-            class="group-hover:bg-surface-gray-10"
-            :class="[selected ? 'bg-surface-gray-10' : 'bg-gray-600']"
-            variant="solid"
-            theme="gray"
-            size="sm"
+          <button
+            v-bind="panelTabAttributes(tab)"
+            :aria-label="
+              tab.name === 'native:Details' && recordPanels.length
+                ? __('Record information')
+                : undefined
+            "
+            class="group flex shrink-0 items-center gap-2 px-1 py-3 text-base text-ink-gray-5 data-[state=active]:text-ink-gray-9"
           >
-            {{ tab.count }}
-          </Badge>
-        </button>
-        <button
-          v-else-if="recordPanels.length"
-          :aria-label="__('Record information')"
-          :title="__('Record information')"
-          class="py-2.5 text-ink-gray-5"
-        >
-          <DetailsIcon class="h-5 w-5" />
-        </button>
-      </template>
-      <template #tab-panel="{ tab }">
+            <Icon
+              v-if="typeof (tab.iconLeft || tab.icon) === 'string'"
+              :icon="tab.iconLeft || tab.icon"
+              class="h-4 w-4"
+            />
+            <component
+              :is="tab.iconLeft || tab.icon"
+              v-else-if="tab.iconLeft || tab.icon"
+              class="h-4 w-4"
+            />
+            <span
+              v-if="!(tab.name === 'native:Details' && recordPanels.length)"
+              >{{ __(tab.label) }}</span
+            >
+            <Badge
+              v-if="tab.count !== undefined"
+              :class="
+                activeTab === tab.name ? 'bg-surface-gray-10' : 'bg-gray-600'
+              "
+              variant="solid"
+              theme="gray"
+              size="sm"
+              >{{ tab.count }}</Badge
+            >
+          </button>
+        </TabTrigger>
+      </TabList>
+      <TabPanel
+        v-for="tab in nativeTabs"
+        :key="tab.name"
+        :value="tab.name"
+        class="min-h-0 flex-1 overflow-auto"
+      >
         <div v-if="tab.name == 'native:Details'">
           <div
             v-if="sections.data"
@@ -161,23 +177,32 @@
           class="grid flex-1 place-items-center text-2xl-medium text-ink-gray-4"
         >
           <div class="flex flex-col items-center justify-center space-y-3">
-            <component :is="tab.icon" class="!h-10 !w-10" />
+            <component :is="tab.iconLeft" class="!h-10 !w-10" />
             <div>{{ __('No {0} found', [__(tab.label.toLowerCase())]) }}</div>
           </div>
         </div>
-      </template>
+      </TabPanel>
     </Tabs>
     <RecordPagePanels :groups="recordPanels" @retry="retryPanels" />
-    <p v-if="recordPanelsLoading && !recordPanels.length" role="status">{{ __('Loading panels...') }}</p>
+    <p v-if="recordPanelsLoading && !recordPanels.length" role="status">
+      {{ __('Loading panels...') }}
+    </p>
     <div v-if="recordPanelsError">
       <ErrorMessage :message="recordPanelsError" />
       <Button :label="__('Retry')" @click="retryPanels" />
     </div>
-    <p v-for="(diagnostic, index) in recordPanelDiagnostics" :key="index" role="status">{{ diagnostic.message }}</p>
+    <p
+      v-for="(diagnostic, index) in recordPanelDiagnostics"
+      :key="index"
+      role="status"
+    >
+      {{ diagnostic.message }}
+    </p>
   </div>
 </template>
 
 <script setup>
+import { TabsRoot as Tabs, TabsTrigger as TabTrigger } from 'reka-ui'
 import Icon from '@/components/Icon.vue'
 import SidePanelLayout from '@/components/SidePanelLayout.vue'
 import LayoutHeader from '@/components/LayoutHeader.vue'
@@ -204,7 +229,8 @@ import {
   Breadcrumbs,
   Avatar,
   FileUploader,
-  Tabs,
+  TabList,
+  TabPanel,
   call,
   createResource,
   usePageMeta,
@@ -212,8 +238,8 @@ import {
   toast,
 } from 'frappe-ui'
 import { useDoctypeModal } from '@/composables/doctypeModal'
-import { useTelemetry } from 'frappe-ui/frappe'
-import { ref, computed, h, onMounted } from 'vue'
+import { useTelemetry } from '@framework/ui/telemetry'
+import { computed, h, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 const { brand } = getSettings()
@@ -306,7 +332,7 @@ async function deleteContact() {
         label: __('Delete'),
         theme: 'red',
         variant: 'solid',
-        async onClick(close) {
+        async onClick({ close }) {
           await call('frappe.client.delete', {
             doctype: 'Contact',
             name: props.contactId,
@@ -323,12 +349,12 @@ const nativeTabs = [
   {
     name: 'native:Details',
     label: __('Details'),
-    icon: DetailsIcon,
+    iconLeft: DetailsIcon,
   },
   {
     name: 'native:Deals',
     label: __('Deals'),
-    icon: h(DealsIcon, { class: 'h-4 w-4' }),
+    iconLeft: h(DealsIcon, { class: 'h-4 w-4' }),
     count: computed(() => deals.data?.length),
   },
 ]
@@ -339,7 +365,7 @@ const {
   diagnostics: recordPanelDiagnostics,
   loading: recordPanelsLoading,
   tabs,
-  tabIndex,
+  activeTab,
   panelSelected,
   panelTabAttributes,
   retry: retryPanels,
@@ -358,7 +384,6 @@ const {
     deleteDoc: deleteContact,
   },
 })
-
 
 const deals = createResource({
   url: 'crm.api.contact.get_linked_deals',
@@ -476,6 +501,10 @@ function showAddressModal(_address) {
 </script>
 
 <style scoped>
-.record-panels-selected { flex: 0 0 auto; }
-.record-panels-selected :deep([role='tabpanel']) { display: none !important; }
+.record-panels-selected {
+  flex: 0 0 auto;
+}
+.record-panels-selected :deep([role='tabpanel']) {
+  display: none !important;
+}
 </style>

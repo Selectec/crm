@@ -13,7 +13,7 @@ export default defineConfig({
     environment: 'happy-dom',
     root: import.meta.dirname,
     setupFiles: [path.resolve(import.meta.dirname, 'tests/setup.js')],
-    include: ['tests/**/*.test.js', 'src/**/*.test.js'],
+    include: ['tests/**/*.test.{js,ts}', 'src/**/*.test.{js,ts}'],
     server: {
       deps: {
         inline: ['frappe-ui', '@framework/ui'],
@@ -32,13 +32,20 @@ export default defineConfig({
     },
   },
   resolve: {
-    dedupe: ['vue', 'vue-router', 'frappe-ui', '@tiptap/core', '@tiptap/pm', 'prosemirror-model'],
+    dedupe: ['vue', 'vue-router', 'frappe-ui', '@vueuse/core', 'reka-ui', 'dompurify', 'vuedraggable', '@codemirror/view', 'marked', '@tiptap/core', '@tiptap/pm', 'prosemirror-model'],
     alias: [
       { find: '@framework/ui', replacement: path.resolve(benchApps, 'frappe/ui/src') },
       { find: '@', replacement: path.resolve(import.meta.dirname, 'src') },
       {
         find: /^~icons\/.*/,
         replacement: path.resolve(import.meta.dirname, 'tests/stubs/icon.js'),
+      },
+      {
+        find: /^@framework\/ui\/(.*)$/,
+        replacement: path.resolve(
+          import.meta.dirname,
+          'tests/stubs/framework/$1',
+        ),
       },
     ],
   },
