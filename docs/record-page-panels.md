@@ -1,5 +1,34 @@
 # Installed-app record-page panels, version 1
 
+## CRM v1.89.2 refresh candidate
+
+This branch integrates official v1.89.2 (`e2d0b47a3ed3c1f45e4d74b3afeb84bf20afacd9`)
+and its Frappe UI 1.0.0-rc.2 dependency. Native site, desktop/phone browser and
+Vite route acceptance remain required before adoption. Earlier stable-toolchain
+notes below describe the v1.87.0 baseline, not a reason to restore its dependencies.
+
+Relationship hosts now select stable qualified tab values. The existing numeric
+`tabIndex` adapter model remains supported. A single public Reka TabsRoot controls
+all triggers; native TabList and TabPanel supply the rail and native panes. Public
+Reka `TabsTrigger as-child` lets the actual button retain its contributed panel's
+`id` and `aria-controls`. Frappe UI's higher-level Tabs/TabTrigger wrapper owns its
+own trigger registry and content IDs, so mixing it with external persistent groups
+breaks those associations. No private UI context or DOM rewriting is used.
+
+Contributed renderer groups remain outside per-method native contents, preserving
+their mounted lifetime and drafts. Force-mounting a separate renderer for each
+method would duplicate its state. A dynamically valued native content is also
+unsuitable: its Reka content registration follows mount/unmount, rather than value
+changes. Real host mount regressions cover the selected composition on all four
+pages, including accessible associations, keyboard selection and draft retention.
+
+The candidate uses the vendor's Vite configuration unchanged. Its own Frappe UI
+exclusion and rc.2's Reka optimizer include supersede our duplicate settings;
+actual development-page/editor proof remains a release gate. The vendor's
+onboarding wrapper replaces the local uninitialized-checklist guard. Installed-app
+discovery, permission/asset ownership, retained groups, editor isolation and native
+component capabilities still have no equivalent released upstream replacement.
+
 CRM Organization and Contact desktop/mobile pages accept declarative installed-app
 panels. CRM discovers declarations, validates asset ownership, loads normal native
 IIFE bundles and retains each renderer group. Apps own business requests, source

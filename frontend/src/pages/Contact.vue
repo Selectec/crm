@@ -12,6 +12,11 @@
         v-if="contact._actions?.length"
         :actions="contact._actions"
       />
+      <Button
+        :label="__('New Deal')"
+        iconLeft="lucide-plus"
+        @click="openDealModal"
+      />
     </template>
   </LayoutHeader>
   <div v-if="contact.doc" ref="parentRef" class="flex h-full">
@@ -42,14 +47,14 @@
                         ? {
                             options: [
                               {
-                                icon: 'upload',
+                                icon: 'lucide-upload',
                                 label: contact.doc.image
                                   ? __('Change Image')
                                   : __('Upload Image'),
                                 onClick: openFileSelector,
                               },
                               {
-                                icon: 'trash-2',
+                                icon: 'lucide-trash-2',
                                 label: __('Remove Image'),
                                 onClick: () => changeContactImage(''),
                               },
@@ -99,7 +104,7 @@
                   :label="__('Delete')"
                   theme="red"
                   size="sm"
-                  iconLeft="trash-2"
+                  iconLeft="lucide-trash-2"
                   @click="deleteContact()"
                 />
               </div>
@@ -121,34 +126,51 @@
     </Resizer>
     <div class="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
       <Tabs
+        v-model="activeTab"
         :class="{ 'record-panels-selected': panelSelected }"
-        v-model="tabIndex"
-        as="div"
-        :tabs="tabs"
-        class="flex flex-1 overflow-hidden flex-col [&_[role='tab']]:px-0 [&_[role='tab']]:shrink-0 [&_[role='tablist']]:px-5 [&_[role='tablist']::-webkit-scrollbar]:h-0 [&_[role='tablist']]:min-h-[45px] [&_[role='tablist']]:gap-7.5 [&_[role='tabpanel']:not([hidden])]:flex [&_[role='tabpanel']:not([hidden])]:grow"
+        class="flex min-h-0 flex-1 flex-col overflow-hidden"
       >
-        <template #tab-item="{ tab, selected }">
-          <button
-            v-bind="panelTabAttributes(tab)"
-            class="group flex items-center gap-2 border-b border-transparent py-2.5 text-base text-ink-gray-5 duration-300 ease-in-out hover:text-ink-gray-9"
-            :class="{ 'text-ink-gray-9': selected }"
+        <TabList class="shrink-0 overflow-x-auto px-4 sm:px-5">
+          <TabTrigger
+            v-for="tab in tabs"
+            :key="tab.name"
+            :value="tab.name"
+            as-child
           >
-            <Icon v-if="typeof tab.icon === 'string'" :icon="tab.icon" class="h-5 w-5" />
-            <component :is="tab.icon" v-else-if="tab.icon" class="h-5" />
-            {{ __(tab.label) }}
-            <Badge
-              v-if="tab.count !== undefined"
-              class="group-hover:bg-surface-gray-10"
-              :class="[selected ? 'bg-surface-gray-10' : 'bg-gray-600']"
-              variant="solid"
-              theme="gray"
-              size="sm"
+            <button
+              v-bind="panelTabAttributes(tab)"
+              class="group flex shrink-0 items-center gap-2 px-1 py-3 text-base text-ink-gray-5 data-[state=active]:text-ink-gray-9"
             >
-              {{ tab.count }}
-            </Badge>
-          </button>
-        </template>
-        <template #tab-panel="{ tab }">
+              <Icon
+                v-if="typeof (tab.iconLeft || tab.icon) === 'string'"
+                :icon="tab.iconLeft || tab.icon"
+                class="h-4 w-4"
+              />
+              <component
+                :is="tab.iconLeft || tab.icon"
+                v-else-if="tab.iconLeft || tab.icon"
+                class="h-4 w-4"
+              />
+              <span>{{ __(tab.label) }}</span>
+              <Badge
+                v-if="tab.count !== undefined"
+                :class="
+                  activeTab === tab.name ? 'bg-surface-gray-10' : 'bg-gray-600'
+                "
+                variant="solid"
+                theme="gray"
+                size="sm"
+                >{{ tab.count }}</Badge
+              >
+            </button>
+          </TabTrigger>
+        </TabList>
+        <TabPanel
+          v-for="tab in nativeTabs"
+          :key="tab.name"
+          :value="tab.name"
+          class="min-h-0 flex-1 overflow-auto"
+        >
           <DealsListView
             v-if="tab.name === 'native:Deals' && rows.length"
             class="mt-4"
@@ -156,16 +178,32 @@
             :columns="columns"
             :options="{ selectable: false, showTooltip: false }"
           />
-          <EmptyState v-if="!rows.length && ['native:Deals', 'native:Contacts'].includes(tab.name)" :icon="tab.icon" name="Deals" />
-        </template>
+          <EmptyState
+            v-if="
+              !rows.length &&
+              ['native:Deals', 'native:Contacts'].includes(tab.name)
+            "
+            :icon="tab.iconLeft || tab.icon"
+            name="Deals"
+            :description="__('Use New Deal to create a deal for this contact.')"
+          />
+        </TabPanel>
       </Tabs>
       <RecordPagePanels :groups="recordPanels" @retry="retryPanels" />
-      <p v-if="recordPanelsLoading && !recordPanels.length" role="status">{{ __('Loading panels...') }}</p>
+      <p v-if="recordPanelsLoading && !recordPanels.length" role="status">
+        {{ __('Loading panels...') }}
+      </p>
       <div v-if="recordPanelsError">
         <ErrorMessage :message="recordPanelsError" />
         <Button :label="__('Retry')" @click="retryPanels" />
       </div>
-      <p v-for="(diagnostic, index) in recordPanelDiagnostics" :key="index" role="status">{{ diagnostic.message }}</p>
+      <p
+        v-for="(diagnostic, index) in recordPanelDiagnostics"
+        :key="index"
+        role="status"
+      >
+        {{ diagnostic.message }}
+      </p>
     </div>
   </div>
   <ErrorPage
@@ -180,9 +218,15 @@
     :docname="contact.doc.name"
     name="Contacts"
   />
+  <DealModal
+    v-if="showDealModal"
+    v-model="showDealModal"
+    :defaults="dealDefaults"
+  />
 </template>
 
 <script setup>
+import { TabsRoot as Tabs, TabsTrigger as TabTrigger } from 'reka-ui'
 import ErrorPage from '@/components/ErrorPage.vue'
 import { useRecordPagePanels } from '@/composables/useRecordPagePanels'
 import RecordPagePanels from '@/components/RecordPagePanels.vue'
@@ -194,6 +238,7 @@ import PhoneIcon from '@/components/Icons/PhoneIcon.vue'
 import CameraIcon from '@/components/Icons/CameraIcon.vue'
 import DealsIcon from '@/components/Icons/DealsIcon.vue'
 import DealsListView from '@/components/ListViews/DealsListView.vue'
+import DealModal from '@/components/Modals/DealModal.vue'
 import CustomActions from '@/components/CustomActions.vue'
 import { validateIsImageFile } from '@/utils'
 import { useContactFields } from '@/composables/useContactFields'
@@ -211,7 +256,8 @@ import {
   Breadcrumbs,
   Avatar,
   FileUploader,
-  Tabs,
+  TabList,
+  TabPanel,
   call,
   createResource,
   usePageMeta,
@@ -219,7 +265,7 @@ import {
   toast,
 } from 'frappe-ui'
 import { useDoctypeModal } from '@/composables/doctypeModal'
-import { useTelemetry } from 'frappe-ui/frappe'
+import { useTelemetry } from '@framework/ui/telemetry'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import EmptyState from '@/components/ListViews/EmptyState.vue'
@@ -299,6 +345,26 @@ usePageMeta(() => {
   }
 })
 const showDeleteLinkedDocModal = ref(false)
+const showDealModal = ref(false)
+const dealDefaults = ref({})
+
+// company_name is free text, so only pick an existing organization; otherwise the deal creates one
+async function openDealModal() {
+  const company = contact.doc.company_name
+  const isOrganization =
+    company &&
+    (await call('frappe.client.get_count', {
+      doctype: 'CRM Organization',
+      filters: { name: company },
+    }))
+  dealDefaults.value = {
+    contact: contact.doc.name,
+    ...(isOrganization
+      ? { organization: company }
+      : { organization_name: company }),
+  }
+  showDealModal.value = true
+}
 
 async function deleteContact() {
   showDeleteLinkedDocModal.value = true
@@ -317,7 +383,7 @@ const nativeTabs = [
   {
     name: 'native:Deals',
     label: 'Deals',
-    icon: DealsIcon,
+    iconLeft: DealsIcon,
     count: computed(() => deals.data?.length),
   },
 ]
@@ -328,7 +394,7 @@ const {
   diagnostics: recordPanelDiagnostics,
   loading: recordPanelsLoading,
   tabs,
-  tabIndex,
+  activeTab,
   panelSelected,
   panelTabAttributes,
   retry: retryPanels,
@@ -347,7 +413,6 @@ const {
     deleteDoc: deleteContact,
   },
 })
-
 
 const deals = createResource({
   url: 'crm.api.contact.get_linked_deals',
@@ -475,10 +540,13 @@ function showAddressModal(_address) {
     },
   })
 }
-
 </script>
 
 <style scoped>
-.record-panels-selected { flex: 0 0 auto; }
-.record-panels-selected :deep([role='tabpanel']) { display: none !important; }
+.record-panels-selected {
+  flex: 0 0 auto;
+}
+.record-panels-selected :deep([role='tabpanel']) {
+  display: none !important;
+}
 </style>

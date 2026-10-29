@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createApp, h, nextTick, ref } from 'vue'
 import { createPinia } from 'pinia'
-import { Badge, Button, Dialog, ErrorMessage, FeatherIcon, FormControl, TextInput } from 'frappe-ui'
+import { Badge, Button, Dialog, ErrorMessage, FormControl, TextInput } from 'frappe-ui'
 import { useRecordPanelRuntime } from '@/components/Activities/recordPanelRuntime'
 import translationPlugin from '@/translation'
 
@@ -17,18 +17,18 @@ const uploaded = {
 vi.mock('@/data/document', async () => {
   const { reactive } = await import('vue')
   return { useDocument: () => ({ document: reactive({ doc: {
-    user_emails: [{ email_account: 'Synthetic configured account', email_id: 'sender@example.test' }],
+    user_emails: [{ email_account: 'Synthetic configured account', email_id: 'sender@example.test', enable_outgoing: 1 }],
   } }) }) }
 })
 vi.mock('@/stores/settings', async () => {
   const { reactive, ref } = await import('vue')
   return { getSettings: () => ({ brand: reactive({}), settings: ref({}), _settings: reactive({ doc: {} }) }) }
 })
-vi.mock('@/stores/users', () => ({ usersStore: () => ({
+vi.mock('@/stores/users', () => ({ usersStore: () => ({isCrmUser:()=>true,
   users: { data: { crmUsers: [] } },
   getUser: () => ({ email: 'author@example.test', full_name: 'Native author' }),
 }) }))
-vi.mock('frappe-ui/frappe', () => ({ useTelemetry: () => ({ capture() {} }) }))
+vi.mock('@framework/ui/telemetry', () => ({ useTelemetry: () => ({ capture() {} }) }))
 vi.mock('frappe-ui', async (original) => {
   const actual = await original()
   const { reactive } = await import('vue')
@@ -106,7 +106,7 @@ async function mountComposer({ uploadFunction, doctype = 'CRM Lead', prior = [] 
   } })
   app.use(createPinia())
   app.use(translationPlugin)
-  for (const [name, component] of Object.entries({ Badge, Button, Dialog, ErrorMessage, FeatherIcon, FormControl, TextInput })) app.component(name, component)
+  for (const [name, component] of Object.entries({ Badge, Button, Dialog, ErrorMessage, FormControl, TextInput })) app.component(name, component)
   app.mount(element)
   await vi.waitFor(() => {
     expect(element.querySelector('[contenteditable="true"]')).not.toBeNull()

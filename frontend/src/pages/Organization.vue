@@ -12,6 +12,43 @@
         v-if="organization._actions?.length"
         :actions="organization._actions"
       />
+      <EnrichFromWebsite
+        doctype="CRM Organization"
+        :docname="props.organizationId"
+        :website="organization.doc?.website"
+        @done="onEnriched"
+      />
+      <Button
+        v-if="activeTab === 'native:Deals'"
+        :label="__('New Deal')"
+        iconLeft="lucide-plus"
+        @click="showDealModal = true"
+      />
+      <Link
+        v-if="activeTab === 'native:Contacts'"
+        value=""
+        doctype="Contact"
+        :filters="{ company_name: ['!=', props.organizationId] }"
+        :onCreate="
+          (value, close) => {
+            _contact = {
+              first_name: value,
+              company_name: props.organizationId,
+            }
+            showContactModal = true
+            close()
+          }
+        "
+        @change="(contact) => addContact(contact)"
+      >
+        <template #target="{ togglePopover }">
+          <Button
+            :label="__('Add Contact')"
+            iconLeft="lucide-plus"
+            @click="togglePopover()"
+          />
+        </template>
+      </Link>
     </template>
   </LayoutHeader>
   <div v-if="organization.doc" ref="parentRef" class="flex h-full">
@@ -42,14 +79,14 @@
                         ? {
                             options: [
                               {
-                                icon: 'upload',
+                                icon: 'lucide-upload',
                                 label: organization.doc.organization_logo
                                   ? __('Change Image')
                                   : __('Upload Image'),
                                 onClick: openFileSelector,
                               },
                               {
-                                icon: 'trash-2',
+                                icon: 'lucide-trash-2',
                                 label: __('Remove Image'),
                                 onClick: () => changeOrganizationImage(''),
                               },
@@ -90,7 +127,7 @@
                   :label="__('Delete')"
                   theme="red"
                   size="sm"
-                  iconLeft="trash-2"
+                  iconLeft="lucide-trash-2"
                   @click="deleteOrganization()"
                 />
                 <Button
@@ -118,34 +155,51 @@
     </Resizer>
     <div class="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
       <Tabs
+        v-model="activeTab"
         :class="{ 'record-panels-selected': panelSelected }"
-        v-model="tabIndex"
-        as="div"
-        :tabs="tabs"
-        class="flex flex-1 overflow-hidden flex-col [&_[role='tablist']]:gap-7.5 [&_[role='tablist']]:px-5 [&_[role='tablist']::-webkit-scrollbar]:h-0 [&_[role='tablist']]:min-h-[45px] [&_[role='tabpanel']:not([hidden])]:flex [&_[role='tabpanel']:not([hidden])]:grow"
+        class="flex min-h-0 flex-1 flex-col overflow-hidden"
       >
-        <template #tab-item="{ tab, selected }">
-          <button
-            v-bind="panelTabAttributes(tab)"
-            class="group flex items-center gap-2 border-b border-transparent py-2.5 text-base text-ink-gray-5 duration-300 ease-in-out hover:text-ink-gray-9"
-            :class="{ 'text-ink-gray-9': selected }"
+        <TabList class="shrink-0 overflow-x-auto px-4 sm:px-5">
+          <TabTrigger
+            v-for="tab in tabs"
+            :key="tab.name"
+            :value="tab.name"
+            as-child
           >
-            <Icon v-if="typeof tab.icon === 'string'" :icon="tab.icon" class="h-5 w-5" />
-            <component :is="tab.icon" v-else-if="tab.icon" class="h-5" />
-            {{ __(tab.label) }}
-            <Badge
-              v-if="tab.count !== undefined"
-              class="group-hover:bg-surface-gray-10"
-              :class="[selected ? 'bg-surface-gray-10' : 'bg-gray-600']"
-              variant="solid"
-              theme="gray"
-              size="sm"
+            <button
+              v-bind="panelTabAttributes(tab)"
+              class="group flex shrink-0 items-center gap-2 px-1 py-3 text-base text-ink-gray-5 data-[state=active]:text-ink-gray-9"
             >
-              {{ tab.count }}
-            </Badge>
-          </button>
-        </template>
-        <template #tab-panel="{ tab }">
+              <Icon
+                v-if="typeof (tab.iconLeft || tab.icon) === 'string'"
+                :icon="tab.iconLeft || tab.icon"
+                class="h-4 w-4"
+              />
+              <component
+                :is="tab.iconLeft || tab.icon"
+                v-else-if="tab.iconLeft || tab.icon"
+                class="h-4 w-4"
+              />
+              <span>{{ __(tab.label) }}</span>
+              <Badge
+                v-if="tab.count !== undefined"
+                :class="
+                  activeTab === tab.name ? 'bg-surface-gray-10' : 'bg-gray-600'
+                "
+                variant="solid"
+                theme="gray"
+                size="sm"
+                >{{ tab.count }}</Badge
+              >
+            </button>
+          </TabTrigger>
+        </TabList>
+        <TabPanel
+          v-for="tab in nativeTabs"
+          :key="tab.name"
+          :value="tab.name"
+          class="min-h-0 flex-1 overflow-auto"
+        >
           <DealsListView
             v-if="tab.name === 'native:Deals' && rows.length"
             class="mt-4"
@@ -161,19 +215,35 @@
             :options="{ selectable: false, showTooltip: false }"
           />
           <EmptyState
-            v-if="!rows.length && ['native:Deals', 'native:Contacts'].includes(tab.name)"
-            :icon="tab.icon"
+            v-if="
+              !rows.length &&
+              ['native:Deals', 'native:Contacts'].includes(tab.name)
+            "
+            :icon="tab.iconLeft || tab.icon"
             :name="__(tab.label)"
+            :description="
+              tab.name === 'native:Deals'
+                ? __('Use New Deal to create a deal for this organization.')
+                : ''
+            "
           />
-        </template>
+        </TabPanel>
       </Tabs>
       <RecordPagePanels :groups="recordPanels" @retry="retryPanels" />
-      <p v-if="recordPanelsLoading && !recordPanels.length" role="status">{{ __('Loading panels...') }}</p>
+      <p v-if="recordPanelsLoading && !recordPanels.length" role="status">
+        {{ __('Loading panels...') }}
+      </p>
       <div v-if="recordPanelsError">
         <ErrorMessage :message="recordPanelsError" />
         <Button :label="__('Retry')" @click="retryPanels" />
       </div>
-      <p v-for="(diagnostic, index) in recordPanelDiagnostics" :key="index" role="status">{{ diagnostic.message }}</p>
+      <p
+        v-for="(diagnostic, index) in recordPanelDiagnostics"
+        :key="index"
+        role="status"
+      >
+        {{ diagnostic.message }}
+      </p>
     </div>
   </div>
   <ErrorPage
@@ -188,9 +258,21 @@
     :docname="props.organizationId"
     name="Organizations"
   />
+  <ContactModal
+    v-if="showContactModal"
+    v-model="showContactModal"
+    :contact="_contact"
+    :options="{ redirect: false, afterInsert: () => contacts.reload() }"
+  />
+  <DealModal
+    v-if="showDealModal"
+    v-model="showDealModal"
+    :defaults="{ organization: props.organizationId }"
+  />
 </template>
 
 <script setup>
+import { TabsRoot as Tabs, TabsTrigger as TabTrigger } from 'reka-ui'
 import ErrorPage from '@/components/ErrorPage.vue'
 import { useRecordPagePanels } from '@/composables/useRecordPagePanels'
 import RecordPagePanels from '@/components/RecordPagePanels.vue'
@@ -205,7 +287,11 @@ import CameraIcon from '@/components/Icons/CameraIcon.vue'
 import DealsIcon from '@/components/Icons/DealsIcon.vue'
 import ContactsIcon from '@/components/Icons/ContactsIcon.vue'
 import DeleteLinkedDocModal from '@/components/DeleteLinkedDocModal.vue'
+import ContactModal from '@/components/Modals/ContactModal.vue'
+import DealModal from '@/components/Modals/DealModal.vue'
+import Link from '@/components/Controls/Link.vue'
 import CustomActions from '@/components/CustomActions.vue'
+import EnrichFromWebsite from '@/components/EnrichFromWebsite.vue'
 import { useDocument } from '@/data/document'
 import { getSettings } from '@/stores/settings'
 import { globalStore } from '@/stores/global'
@@ -223,7 +309,8 @@ import {
   Avatar,
   FileUploader,
   Dropdown,
-  Tabs,
+  TabList,
+  TabPanel,
   createListResource,
   usePageMeta,
   createResource,
@@ -231,7 +318,7 @@ import {
   call,
 } from 'frappe-ui'
 import { useDoctypeModal } from '@/composables/doctypeModal'
-import { useTelemetry } from 'frappe-ui/frappe'
+import { useTelemetry } from '@framework/ui/telemetry'
 import { computed, ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -254,6 +341,10 @@ const errorMessage = ref('')
 
 const showDeleteLinkedDocModal = ref(false)
 
+const showContactModal = ref(false)
+const showDealModal = ref(false)
+const _contact = ref({})
+
 const {
   document: organization,
   permissions,
@@ -262,6 +353,11 @@ const {
 } = useDocument('CRM Organization', props.organizationId)
 
 const canDelete = computed(() => permissions.data?.permissions?.delete || false)
+
+function onEnriched() {
+  organization.reload?.()
+  sections.reload()
+}
 
 onMounted(async () => {
   if (organization.doc) await triggerOnRender()
@@ -387,13 +483,13 @@ const nativeTabs = [
   {
     name: 'native:Deals',
     label: 'Deals',
-    icon: DealsIcon,
+    iconLeft: DealsIcon,
     count: computed(() => deals.data?.length),
   },
   {
     name: 'native:Contacts',
     label: 'Contacts',
-    icon: ContactsIcon,
+    iconLeft: ContactsIcon,
     count: computed(() => contacts.data?.length),
   },
 ]
@@ -404,7 +500,7 @@ const {
   diagnostics: recordPanelDiagnostics,
   loading: recordPanelsLoading,
   tabs,
-  tabIndex,
+  activeTab,
   panelSelected,
   panelTabAttributes,
   retry: retryPanels,
@@ -423,7 +519,6 @@ const {
     deleteDoc: deleteOrganization,
   },
 })
-
 
 const deals = createListResource({
   type: 'list',
@@ -470,7 +565,7 @@ const contacts = createListResource({
 })
 
 const rows = computed(() => {
-  const isDeals = tabs.value[tabIndex.value]?.name === 'native:Deals'
+  const isDeals = activeTab.value === 'native:Deals'
   let list = isDeals ? deals : contacts
 
   if (!list.data) return []
@@ -483,7 +578,7 @@ const rows = computed(() => {
 const { getFormattedCurrency } = getMeta('CRM Deal')
 
 const columns = computed(() => {
-  return tabs.value[tabIndex.value]?.name === 'native:Deals' ? dealColumns : contactColumns
+  return activeTab.value === 'native:Deals' ? dealColumns : contactColumns
 })
 
 function getDealRowObject(deal) {
@@ -608,10 +703,13 @@ function showAddressModal(_address) {
     },
   })
 }
-
 </script>
 
 <style scoped>
-.record-panels-selected { flex: 0 0 auto; }
-.record-panels-selected :deep([role='tabpanel']) { display: none !important; }
+.record-panels-selected {
+  flex: 0 0 auto;
+}
+.record-panels-selected :deep([role='tabpanel']) {
+  display: none !important;
+}
 </style>

@@ -1,5 +1,20 @@
 # Native rendering and editor facade
 
+The v1.89.2 refresh candidate retains this contract with the vendor's Frappe UI
+1.0.0-rc.2 APIs. `native.TextEditor` delegates `content`, `editable`, `editorClass`
+and `change` to CRM's native RichTextField with formatting menus disabled. This
+preserves the current contributed Note/Task detail viewers without restoring the
+removed root TextEditor export or owning another editor engine. Composers continue
+to use the native Editor, toolbar, upload and mention implementations.
+
+Native sales Activities uses the new string-valued `activeTab` and tab `value`
+inputs. Contributed adapter Activities retains its existing numeric `tabIndex`
+and tab `name` inputs. Default native modal saves adopt blur-before-submit and
+unchanged-document handling; opted-in full-document saves keep their independent
+working copy and original revision. The unchanged shared-cache shortcut must not
+discard a changed editor copy. Native/browser persistence and Vite acceptance for
+this candidate are pending, independently of passing controlled-transport mounts.
+
 Generic installed-app registration is documented in [Record-page panels](record-page-panels.md).
 
 Native Task Kanban source shortcuts use the existing typed Lead, Deal,

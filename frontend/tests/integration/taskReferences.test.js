@@ -30,10 +30,11 @@ vi.mock('@/components/ViewControls.vue', () => ({
 vi.mock('@/stores/meta', () => ({ getMeta: () => ({
   getFormattedPercent() {}, getFormattedFloat() {}, getFormattedCurrency() {},
 }) }))
-vi.mock('@/stores/users', () => ({ usersStore: () => ({ getUser: () => ({}), isManager: () => false }) }))
+vi.mock('@/stores/users', () => ({ usersStore: () => ({isCrmUser:()=>true, getUser: () => ({}), isManager: () => false }) }))
 vi.mock('@/utils', () => ({ formatDate: value => value, isTouchScreenDevice: () => false, colors: ['gray'], parseColor: () => '' }))
 vi.mock('@/composables/useTimelinePreferences', () => ({ timestampCell: value => ({ label: value }) }))
-vi.mock('frappe-ui/frappe', () => ({ useOnboarding: () => ({ updateOnboardingStep() {} }), useTelemetry: () => ({ capture() {} }) }))
+vi.mock('@/composables/onboarding', () => ({ useCrmOnboarding: () => ({ completeStep() {} }) }))
+vi.mock('@framework/ui/telemetry', () => ({ useOnboarding: () => ({ updateOnboardingStep() {} }), useTelemetry: () => ({ capture() {} }) }))
 
 let app, element
 afterEach(() => {

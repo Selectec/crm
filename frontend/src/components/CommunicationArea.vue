@@ -1,5 +1,18 @@
 <template>
-  <div class="flex justify-between gap-3 border-t px-4 py-2.5">
+  <div class="relative flex justify-between gap-3 border-t px-4 py-2.5">
+    <div
+      v-if="showEmailBox || showCommentBox"
+      class="group absolute inset-x-0 -top-1 z-10 flex h-2 cursor-row-resize touch-none items-center"
+      @pointerdown="startResize"
+      @pointermove="resize"
+      @pointerup="stopResize"
+      @pointercancel="stopResize"
+    >
+      <div
+        class="h-0.5 w-full bg-surface-gray-4 opacity-0 transition-opacity group-hover:opacity-100"
+        :class="{ 'opacity-100': resizing }"
+      />
+    </div>
     <div class="flex gap-1.5">
       <Button
         variant="ghost"
@@ -23,6 +36,7 @@
   </div>
   <div
     v-show="showEmailBox"
+    ref="emailPanel"
     @keydown.ctrl.enter.capture.stop="submitEmail"
     @keydown.meta.enter.capture.stop="submitEmail"
   >
@@ -50,6 +64,7 @@
         },
       }"
       :editable="showEmailBox"
+      :height="clampedEditorHeight"
       :doctype="doctype"
       :subject="subject"
       :placeholder="
@@ -59,6 +74,7 @@
   </div>
   <div
     v-show="showCommentBox"
+    ref="commentPanel"
     @keydown.ctrl.enter.capture.stop="submitComment"
     @keydown.meta.enter.capture.stop="submitComment"
   >
@@ -80,6 +96,7 @@
         },
       }"
       :editable="showCommentBox"
+      :height="clampedEditorHeight"
       :doctype="doctype"
       :placeholder="__('@John, can you please check this?')"
     />
@@ -93,8 +110,8 @@ import CommentIcon from '@/components/Icons/CommentIcon.vue'
 import Email2Icon from '@/components/Icons/Email2Icon.vue'
 import { isContentEmpty } from '@/utils'
 import { usersStore } from '@/stores/users'
-import { useStorage } from '@vueuse/core'
-import { useOnboarding, useTelemetry } from 'frappe-ui/frappe'
+import { useStorage, useWindowSize } from '@vueuse/core'
+import { useTelemetry } from '@framework/ui/telemetry'
 import { call, createResource, toast } from 'frappe-ui'
 import { ref, watch, computed } from 'vue'
 
@@ -108,7 +125,6 @@ const reload = defineModel('reload', { type: Boolean })
 const emit = defineEmits(['scroll'])
 
 const { getUser } = usersStore()
-const { updateOnboardingStep } = useOnboarding('frappecrm')
 const { capture } = useTelemetry()
 
 const showEmailBox = ref(false)
@@ -129,6 +145,47 @@ const newComment = useStorage(
 )
 const newEmailEditor = ref(null)
 const newCommentEditor = ref(null)
+
+const MIN_EDITOR_HEIGHT = 112
+const MAX_EDITOR_HEIGHT_RATIO = 0.6
+
+const emailPanel = ref(null)
+const commentPanel = ref(null)
+const editorHeight = useStorage('communicationEditorHeight', 0)
+const { height: windowHeight } = useWindowSize()
+const resizing = ref(false)
+let dragStart = null
+
+const clampedEditorHeight = computed(
+  () => editorHeight.value && clampEditorHeight(editorHeight.value),
+)
+
+function clampEditorHeight(height) {
+  const max = windowHeight.value * MAX_EDITOR_HEIGHT_RATIO
+  return Math.round(Math.min(Math.max(height, MIN_EDITOR_HEIGHT), max))
+}
+
+function startResize(event) {
+  const panel = showEmailBox.value ? emailPanel.value : commentPanel.value
+  const editor = panel?.querySelector('[data-resizable-editor]')
+  if (!editor) return
+  event.preventDefault()
+  event.currentTarget.setPointerCapture(event.pointerId)
+  dragStart = { y: event.clientY, height: editor.offsetHeight }
+  resizing.value = true
+}
+
+function resize(event) {
+  if (!dragStart) return
+  editorHeight.value = clampEditorHeight(
+    dragStart.height + dragStart.y - event.clientY,
+  )
+}
+
+function stopResize() {
+  dragStart = null
+  resizing.value = false
+}
 
 const attachments = useStorage(
   `attachments-${getUser().email}-${props.doctype}-${doc.value.name}`,
@@ -203,6 +260,10 @@ const emailEmpty = computed(
     isContentEmpty(newEmail.value) || !newEmailEditor.value?.toEmails?.length,
 )
 
+const emailBlocked = computed(
+  () => emailEmpty.value || newEmailEditor.value?.sendBlocked,
+)
+
 async function sendMail() {
   let fromEmail = newEmailEditor.value.fromEmail || getUser().email
   let recipients = newEmailEditor.value.toEmails
@@ -265,7 +326,7 @@ async function deleteAttachedFiles() {
 }
 
 async function submitEmail() {
-  if (emailEmpty.value) return
+  if (emailBlocked.value) return
   showEmailBox.value = false
   // toast.promise returns the toast id (not the promise), so await the send
   // itself — otherwise the reload below fires before the email is committed and
@@ -286,7 +347,6 @@ async function submitEmail() {
   reload.value = true
   emit('scroll')
   capture('email_sent', { doctype: props.doctype })
-  updateOnboardingStep('send_first_email')
 }
 
 async function submitComment() {
@@ -308,7 +368,6 @@ async function submitComment() {
   reload.value = true
   emit('scroll')
   capture('comment_sent', { doctype: props.doctype })
-  updateOnboardingStep('add_first_comment')
 }
 
 function toggleEmailBox() {

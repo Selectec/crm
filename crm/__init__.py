@@ -1,2 +1,2 @@
-__version__ = "1.87.0"
+__version__ = "1.89.2"
 __title__ = "Frappe CRM"

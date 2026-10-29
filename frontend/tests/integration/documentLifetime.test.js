@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createApp, h, nextTick, ref } from 'vue'
 import { createPinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
-import { Button, Dialog, ErrorMessage, FeatherIcon, setConfig } from 'frappe-ui'
+import { Button, Dialog, ErrorMessage, setConfig } from 'frappe-ui'
 import DoctypeModals from '@/components/Modals/DoctypeModals.vue'
 import { useDoctypeModal } from '@/composables/doctypeModal'
 import translationPlugin from '@/translation'
@@ -70,7 +70,7 @@ async function mount() {
   app = createApp({ render: () => h('div', [h(DoctypeModals), secondVisible.value ? h(SecondOwner) : null]) })
   app.config.globalProperties.$socket = socket
   app.use(createPinia()); app.use(router); app.use(translationPlugin)
-  for (const [name, component] of Object.entries({ Button, Dialog, ErrorMessage, FeatherIcon })) app.component(name, component)
+  for (const [name, component] of Object.entries({ Button, Dialog, ErrorMessage })) app.component(name, component)
   app.mount(element)
 }
 async function update(doctype, name) {

@@ -8,7 +8,7 @@
     >
       {{ __(attrs.label) }}
       <template v-if="required">
-        <span class="select-none text-ink-red-6" aria-hidden="true">*</span>
+        <span class="select-none text-ink-red-5" aria-hidden="true">*</span>
         <span class="sr-only">{{ __('(required)') }}</span>
       </template>
     </label>
@@ -59,7 +59,7 @@
             variant="ghost"
             class="w-full !justify-start"
             :label="__('Create New')"
-            iconLeft="plus"
+            iconLeft="lucide-plus"
             @click="() => attrs.onCreate(v, close)"
           />
         </div>
@@ -68,7 +68,7 @@
             variant="ghost"
             class="w-full !justify-start"
             :label="__('Clear')"
-            iconLeft="x"
+            iconLeft="lucide-x"
             @click="() => clearValue(close)"
           />
         </div>

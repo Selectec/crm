@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createApp, h, nextTick, reactive } from 'vue'
 import { createPinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
-import { Button, Dialog, ErrorMessage, FeatherIcon, FormControl, TextInput } from 'frappe-ui'
+import { Button, Dialog, ErrorMessage, FormControl, TextInput } from 'frappe-ui'
 import GlobalModals from '@/components/Modals/GlobalModals.vue'
 import { getScript } from '@/data/script'
 import { fieldLayoutDialogs } from '@/utils/renderFieldLayoutDialog'
@@ -80,7 +80,7 @@ async function open() {
   element = document.createElement('div'); document.body.append(element)
   app = createApp({ render: () => h('div', [h(Button, { label: 'Existing native action' }), h(GlobalModals)]) })
   app.use(createPinia()); app.use(router); app.use(translationPlugin)
-  for (const [name, component] of Object.entries({ Button, Dialog, ErrorMessage, FeatherIcon, FormControl, TextInput })) app.component(name, component)
+  for (const [name, component] of Object.entries({ Button, Dialog, ErrorMessage, FormControl, TextInput })) app.component(name, component)
   app.mount(element)
   ;[controller] = await getScript('CRM Deal').setupScript(record)
   controller.onRender()
