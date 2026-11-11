@@ -269,3 +269,9 @@ a compact option. Wyatt's scoped CSS therefore remains necessary; check long
 labels, actual emoji targets and formatting controls at 1280px and 390px. These
 are app layout assumptions, not additional CRM patches. Retire those selectors
 when upstream exposes fitting layout options or changes the corresponding DOM.
+# Organization Contacts
+
+The separately bounded native relationship reader and its desktop/mobile
+consumers are documented in [Organization Contacts](organization-contacts.md).
+It does not expand the contribution-host or component-facade contract.
+

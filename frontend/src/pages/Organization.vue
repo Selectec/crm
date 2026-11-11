@@ -214,9 +214,31 @@
             :columns="columns"
             :options="{ selectable: false, showTooltip: false }"
           />
+          <div
+            v-if="tab.name === 'native:Contacts'"
+            class="flex flex-wrap items-center gap-3 px-5 py-3"
+          >
+            <Button
+              :label="__('Refresh Contacts')"
+              :loading="contacts.loading"
+              @click="contacts.reload"
+            />
+            <span v-if="!contacts.error" role="status">{{
+              __('{0} of {1}', [contacts.data.length, contacts.totalCount])
+            }}</span>
+            <Button
+              v-if="contacts.hasMore"
+              :label="__('Load more')"
+              :loading="contacts.loading"
+              @click="contacts.loadMore"
+            />
+            <p v-if="contacts.error" role="alert">{{ __(contacts.error) }}</p>
+          </div>
           <EmptyState
             v-if="
               !rows.length &&
+              (tab.name !== 'native:Contacts' ||
+                (!contacts.loading && !contacts.error)) &&
               ['native:Deals', 'native:Contacts'].includes(tab.name)
             "
             :icon="tab.iconLeft || tab.icon"
@@ -275,6 +297,7 @@
 import { TabsRoot as Tabs, TabsTrigger as TabTrigger } from 'reka-ui'
 import ErrorPage from '@/components/ErrorPage.vue'
 import { useRecordPagePanels } from '@/composables/useRecordPagePanels'
+import { useOrganizationContacts } from '@/composables/useOrganizationContacts'
 import RecordPagePanels from '@/components/RecordPagePanels.vue'
 import Resizer from '@/components/Resizer.vue'
 import SidePanelLayout from '@/components/SidePanelLayout.vue'
@@ -319,7 +342,7 @@ import {
 } from 'frappe-ui'
 import { useDoctypeModal } from '@/composables/doctypeModal'
 import { useTelemetry } from '@framework/ui/telemetry'
-import { computed, ref, onMounted } from 'vue'
+import { computed, ref, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 const props = defineProps({
@@ -490,7 +513,7 @@ const nativeTabs = [
     name: 'native:Contacts',
     label: 'Contacts',
     iconLeft: ContactsIcon,
-    count: computed(() => contacts.data?.length),
+    count: computed(() => contacts.totalCount),
   },
 ]
 
@@ -543,26 +566,20 @@ const deals = createListResource({
   auto: true,
 })
 
-const contacts = createListResource({
-  type: 'list',
-  doctype: 'Contact',
-  cache: ['contacts', props.organizationId],
-  fields: [
-    'name',
-    'full_name',
-    'image',
-    'email_id',
-    'mobile_no',
-    'company_name',
-    'modified',
-  ],
-  filters: {
-    company_name: props.organizationId,
+const contacts = useOrganizationContacts(() => props.organizationId)
+
+watch(
+  () => activeTab.value,
+  (tab) => {
+    if (tab === 'native:Contacts') void contacts.reload()
   },
-  orderBy: 'modified desc',
-  pageLength: 20,
-  auto: true,
-})
+)
+watch(
+  () => organization.doc?.modified,
+  () => {
+    void contacts.reload()
+  },
+)
 
 const rows = computed(() => {
   const isDeals = activeTab.value === 'native:Deals'
@@ -615,7 +632,7 @@ function getContactRowObject(contact) {
     mobile_no: contact.mobile_no,
     company_name: {
       label: contact.company_name,
-      logo: organization.doc?.organization_logo,
+      logo: contact.company_logo,
     },
     modified: timestampCell(contact.modified),
   }

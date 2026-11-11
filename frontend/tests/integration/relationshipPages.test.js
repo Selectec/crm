@@ -59,6 +59,9 @@ vi.mock('frappe-ui', async (original) => {
   const actual = await original()
   const { reactive } = await import('vue')
   return { ...actual, call: async (method, context) => {
+    if (method === 'crm.fcrm.doctype.crm_organization.crm_organization.get_contacts') {
+      return { data: [], total_count: 0 }
+    }
     if (method === 'frappe.client.set_value' && context.doctype === 'Comment') {
       fixture.commentWrites?.push(context)
       return context
