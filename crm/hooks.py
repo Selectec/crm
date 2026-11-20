@@ -102,7 +102,10 @@ website_route_rules = [
 # ------------
 
 before_install = "crm.install.before_install"
-after_install = "crm.install.after_install"
+after_install = [
+	"crm.install.after_install",
+	"frappe.search.sqlite_search.build_index_in_background",
+]
 
 # Uninstallation
 # ------------
@@ -141,6 +144,7 @@ permission_query_conditions = {
 	"CRM Deal": "crm.permissions.org_hierarchy.get_deal_permission_query_conditions",
 	"CRM Notification": "crm.fcrm.doctype.crm_notification.crm_notification.get_permission_query_conditions",
 	"CRM Enrichment Run": "crm.domain_enrichment.doctype.crm_enrichment_run.crm_enrichment_run.get_permission_query_conditions",
+	"Data Import": "crm.permissions.data_import.get_permission_query_conditions",
 }
 
 has_permission = {
@@ -148,6 +152,7 @@ has_permission = {
 	"CRM Deal": "crm.permissions.org_hierarchy.has_deal_permission",
 	"CRM Notification": "crm.fcrm.doctype.crm_notification.crm_notification.has_permission",
 	"CRM Enrichment Run": "crm.domain_enrichment.doctype.crm_enrichment_run.crm_enrichment_run.has_permission",
+	"Data Import": "crm.permissions.data_import.has_permission",
 }
 
 # Automation Engine
@@ -269,6 +274,7 @@ doc_events = {
 			"crm.automation.events.on_communication",
 		],
 		"on_update": ["crm.utils.on_communication_update"],
+		"on_change": ["crm.api.email.stamp_send_time"],
 	},
 	"Comment": {
 		"after_insert": ["crm.utils.on_comment_insert"],
@@ -431,6 +437,8 @@ after_migrate = [
 	"crm.install.add_web_form_custom_fields",
 	"crm.domain_enrichment.install.seed_default_rules_and_mappings",
 ]
+
+sqlite_search = ["crm.search_sqlite.CRMSearch"]
 
 standard_dropdown_items = [
 	{
