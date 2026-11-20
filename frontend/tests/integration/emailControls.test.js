@@ -159,7 +159,7 @@ describe('native Email record-panel facade', () => {
       for (const method of ['clearContent', 'updateAttributes', 'insertContent', 'focus', 'insertContentAt', 'run']) {
         chain[method] = vi.fn((...args) => { operations.push({ method, args }); return chain })
       }
-      const emailBox = { show: false, openEmailBox() { this.show = true }, editor: { editor: { chain: () => chain } } }
+      const emailBox = { show: false, openEmailBox() { this.show = true }, editor: { editor: { chain: () => chain, state: { doc: { forEach() {} } } } } }
       const onReply = vi.fn(() => {
         expect(emailBox.show).toBe(true)
         expect(emailBox.editor.subject).toBe(`Re: ${email.subject}`)
@@ -196,7 +196,7 @@ describe('native Email record-panel facade', () => {
     for (const method of ['clearContent', 'updateAttributes', 'insertContent', 'focus', 'insertContentAt', 'run']) {
       chain[method] = vi.fn(() => chain)
     }
-    const emailBox = { show: false, openEmailBox() { this.show = true }, editor: { editor: { chain: () => chain } } }
+    const emailBox = { show: false, openEmailBox() { this.show = true }, editor: { editor: { chain: () => chain, state: { doc: { forEach() {} } } } } }
     element = document.createElement('div')
     document.body.append(element)
     app = createApp({ setup() {

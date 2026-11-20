@@ -269,3 +269,51 @@ a compact option. Wyatt's scoped CSS therefore remains necessary; check long
 labels, actual emoji targets and formatting controls at 1280px and 390px. These
 are app layout assumptions, not additional CRM patches. Retire those selectors
 when upstream exposes fitting layout options or changes the corresponding DOM.
+# Organization Contacts
+
+The separately bounded native relationship reader and its desktop/mobile
+consumers are documented in [Organization Contacts](organization-contacts.md).
+It does not expand the contribution-host or component-facade contract.
+
+
+## v16.0.4 upgrade inventory — 20 November 2026
+
+The checkpoint base is official CRM v16.0.4
+(`9ace234fceb3c5e7bd630b74f44ba1779e831abe`) on Frappe 16.56.0
+(`49789a1711`). It merges the existing Selectec pin
+`341e950773f12938b5a4056464d5d3ad7c949b76`; it introduces no new
+contribution hooks or general CRM bug fixes. The earlier dated inventory remains
+historical. The maintained surface is still the ADR 0007/#190 host/editor
+contract and the separately approved #335 Contact affiliation reader.
+
+| Carried paths | Existing approved responsibility and v16 decision |
+| --- | --- |
+| `crm/api/record_page.py`, RecordPagePanels, useRecordPagePanels, recordPanelRegistry, Contact/Organization and mobile pages | Preserve installed-app discovery, typed record/panel identity, error/retry, native tabs and navigation. Upstream still lacks the complete host. |
+| Activities and its area components, recordPanelRuntime, RecordPanelTextEditor, CommentBox, EmailEditor | Preserve opt-in activity identities, native component facade, attachments, caller callbacks and permissions. Take upstream scheduled-email and draft-retention behavior; ordinary Lead/Deal callers retain upstream defaults. |
+| DoctypeModal(s), GlobalModals, RecordPanelDialog(Container), renderRecordPanelDialog, doctypeModal, Field(Layout), document/script data and recordRealtime | Preserve opt-in revision-aware saves, independent controller/draft ownership, scoped native realtime and widget callbacks. Native save and permission endpoints remain authoritative. |
+| Notifications/MobileNotification, Tasks, recordRoute, CallLogDetailModal | Preserve typed routes, optional caller creation context and native sales fallbacks. |
+| `crm/api/comment.py`, noteView and Link | Preserve previously carried generalized native mentions/titles, permission-checked shared Note opening and footer focus handling. No new behavior was added to these adaptations. |
+| Organization controller, useOrganizationContacts and Organization/mobile consumers | Preserve the #335 direct-affiliation OR selected-company reader, deduplication, native permissions, label/logo redaction, totals and stable pagination. The reader is unchanged from 341e9507. Take upstream selected-company Add Contact implementation without adding membership editing. |
+| Carried tests, Vitest configs and documentation | Keep native contract fixtures, sibling-framework alias/deduplication and component mounts. Adapt fake rich editor documents to the upstream reply-draft traversal. No test-only runtime transform is added. |
+
+Merge conflict resolutions are limited to Activities.vue (combine adapter email
+props/resource and exact listener disposal with upstream reload/hash handling),
+CommentArea.vue (retain opted-in saveAction; default to upstream update_comment),
+and EmailArea.vue (retain canReply and reply event around upstream scheduled
+actions/draft retention). All other release changes come from upstream.
+
+Upstream now emits Communication identity in both sales activity producers. Remove
+the duplicate carried dictionary entries and use that upstream implementation;
+the retained activity identity regressions exercise it in the native test lane.
+Upstream's Vite config now also contains the required frappe-ui optimizer
+exclusion: there is no remaining production Vite-config delta. Browser verification
+of actual Vite routes is still required before retiring its operational check.
+No other carried workaround is declared upstream-equivalent or removed.
+
+Site-free qualification uses the unchanged upstream frontend manifest/lock,
+Node 24.22.3 and Yarn 1.22.22: production build and the default Vitest suite.
+It is separate from native Frappe tests, populated upgrade/two migrations, fresh
+installation and desktop/phone browser acceptance. Those gates must verify
+Organisation/Contact save/reload, affiliations and counts, permission filtering,
+Lead/Deal defaults, uploads and real realtime. Device/PWA checks remain separate.
+Do not infer runtime acceptance from this source inventory or a frontend pass.
